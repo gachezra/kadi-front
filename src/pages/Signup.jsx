@@ -1,51 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from "react-router-dom";
 import { FaGoogle } from "react-icons/fa";
-import { UserAuth } from "../context/AuthContext";
 import axios from 'axios';
+import { registerRoute } from '../utils/APIRoutes';
 
 const Signup = () => {
-    const [userName, setUserName] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [error, setError] = useState("");
+    const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const navigate = useNavigate();
 
-    const navigate = useNavigate();
-    const { createUser, googleLogin, savePlayer } = UserAuth();
+  useEffect(() => {
+    const user = localStorage.getItem('token');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError("");
+    if (user) {
+      navigate('/');
+    }
+  }, [navigate]);
 
-        if (password !== confirmPassword) {
-            setError("Passwords do not match");
-            return;
-        }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-        try {
-            await createUser(email, password);
-            await savePlayer(userName, email, password);
-            navigate("/account");
-        } catch (err) {
-            setError(err.message);
-            console.log(err.message);
-        }
-    };
+    // Check password length
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+
+    // Check if passwords match
+    if (password !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+
+    await axios.post( registerRoute, {
+        email,
+        username,
+        password,
+    })
+    // On success, redirect to login
+    navigate('/login');
+  };
 
     const handleGoogleSignin = async () => {
-        try {
-            await googleLogin();
-            navigate("/account");
-        } catch (err) {
-            setError(err.message);
-            console.log(err.message);
-        }
+        // try {
+        //     await googleLogin();
+        //     navigate("/account");
+        // } catch (err) {
+        //     setError(err.message);
+        //     console.log(err.message);
+        // }
     };
 
     return (
         <div className="flex items-center justify-center min-h-screen dark:bg-[#000614] bg-[#ebf1ff] rounded-lg shadow-lg">
-            <div className="main bg-gray-200 rounded-lg shadow-md p-10 transition-transform w-full max-w-md text-center">
+            <div className="main bg-gray-200 rounded-lg shadow-md p-10 mx-4 transition-transform w-full max-w-md text-center">
                 <h1 className="text-green-600 text-3xl">NikoKadi</h1>
                 <h3 className="text-lg">Create a new account</h3>
                 <div className="my-4 flex justify-center">
@@ -63,15 +73,15 @@ const Signup = () => {
                     </p>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <label htmlFor="userName" className="block mt-4 mb-2 text-left text-gray-700 font-bold">
+                    <label htmlFor="username" className="block mt-4 mb-2 text-left text-gray-700 font-bold">
                         Username:
                     </label>
                     <input
                         className="block w-full mb-6 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-green-400"
                         type="text"
-                        id="userName"
+                        id="username"
                         value={email}
-                        onChange={(e) => setUserName(e.target.value)}
+                        onChange={(e) => setUsername(e.target.value)}
                         placeholder="Enter your Username"
                         required
                     />

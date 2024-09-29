@@ -2,19 +2,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { Provider } from 'react-redux';
+import { store } from './chat/app/store';
 import { ThemeProvider } from './components/ThemeContext'
 import Background from './components/Background'
 import reportWebVitals from './reportWebVitals';
-import { AuthContextProvider } from "./context/AuthContext";
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
     <React.StrictMode>
         <ThemeProvider>
             <Background>
-                <AuthContextProvider>
+                <Provider store={store}>
                     <App />
-                </AuthContextProvider>
+                </Provider>
             </Background>
         </ThemeProvider>
     </React.StrictMode>

@@ -1,47 +1,46 @@
-import React from 'react'
-import { useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from "react-router-dom";
 import { FaGoogle } from "react-icons/fa";
-import { UserAuth } from "../context/AuthContext";
+import axios from 'axios';
+import { loginRoute } from '../utils/APIRoutes'
 
 const Login = () => {
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-  
-    const [error, setError] = useState("");
-  
-    const navigate = useNavigate();
-  
-    const { loginUser, googleLogin, fetchPlayerData } = UserAuth();
-  
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      setError("");
-  
-      try {
-        await loginUser(email, password);
-        // Fetch player data after successful login
-        await fetchPlayerData(email);
-        navigate("/account");
-      } catch (err) {
-        setError(err.message);
-        console.log(err.message);
-      }
-    };
-  
-    const handleGoogleSignin = async () => {
-      try {
-        await googleLogin();
-        navigate("/account");
-      } catch (err) {
-        setError(err.message);
-        console.log(err.message);
-      }
-    };
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const user = localStorage.getItem('token');
+
+    if (user) {
+      navigate('/');
+    }
+  }, [navigate]);
+
+  const handleGoogleSignin = () => {
+    // TODO: Implement Google Sign-In
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const response = await axios.post( loginRoute, {
+        email,
+        password,
+    });
+
+    const { uid, token} = response.data;
+
+    // Save to localStorage
+    localStorage.setItem('uid', uid);
+    localStorage.setItem('token', token);
+
+    // Redirect to home page or dashboard
+    navigate('/rooms');
+  };
 
     return (
       <div className="flex items-center justify-center min-h-screen dark:bg-[#000614] bg-[#ebf1ff] rounded-lg shadow-lg">
-        <div className="main bg-gray-200  rounded-lg shadow-md p-10 transition-transform w-full max-w-md text-center">
+        <div className="main bg-gray-200  rounded-lg shadow-md p-10 transition-transform w-full mx-4 max-w-md text-center">
           <h1 className="text-green-600 text-3xl">NikoKadi</h1>
           <h3 className="text-lg">Login to your account</h3>
           <div className="my-4 flex justify-center">
