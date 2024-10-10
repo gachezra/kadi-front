@@ -25,7 +25,7 @@ const Sidebar = () => {
     { title: 'Rooms', path: '/rooms', src: <GiCardAceSpades /> },
     { title: 'How To', path: '/course', src: <SiFuturelearn /> },
     { title: 'Profile', path: '/profile', src: <CgProfile />, requiredAuth: true },
-    { title: 'Sign In', path: '/signin', src: <SiOpenaccess />, gap: 'true', requiredAuth: false },
+    { title: 'Sign In', path: '/signin', src: <SiOpenaccess />, gap: 'true', requiredAuth: true },
   ]
 
   return (
