@@ -22,12 +22,14 @@ const Room = () => {
   const fetchRoomDetails = useCallback(async () => {
     try {
       const response = await axios.get(getRoomDetailsRoute(roomId));
-      console.log('Room Updated')
+      console.log('Room Updated', response.data);
+      if (response.data.roomData) {
+        setError(response.data.message);
+        setMessage(response.data.roomData);
+        return;
+      };
       setRoom(response.data.clientRoom);
       setAwaitingAceDrops(response.data.clientRoom.awaitingAceDrops || false);
-      if (!response.data.clientRoom) {
-        setMessage(response.data.winnerMessage)
-      };
     } catch (err) {
       setError('Failed to fetch room details');
       console.error('Error fetching room details:', err);
@@ -159,9 +161,25 @@ const Room = () => {
   }
 
   if (!room) {
+    console.log(message)
     return (
       <div className="bg-[#151515] min-h-screen p-8">
         {error && <div className="text-red-500 mb-4">{error}</div>}
+        <div className="text-green-500 mb-4 text-2xl">{message.winnerMessage}</div>
+        <h1 className="text-xl font-bold text-[#F5F5F5]">Room: {message.roomCode}</h1>
+        <div>
+          <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Players</h2>
+          {message ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {message.playerList.map((player, index) => (
+                <div key={index} className={`p-4 rounded ${player.userId === userId ? 'bg-[#282734]' : 'bg-[#2F2D40]'}`}>
+                  <p className="text-[#F5F5F5]">{player.username}</p>
+                  <p className="text-[#B0A7B3]">Cards: {player.hand.length}</p>
+                </div>
+              ))}
+            </div>
+          ) : ''}
+        </div>
       </div>
     );
   }
@@ -178,11 +196,14 @@ const Room = () => {
         onClick={terminateRoom}
         className="bg-transparent border-2 border-[#D83149] text-[#D83149] hover:bg-opacity-10 hover:bg-gray-300 font-bold py-2 px-4 rounded-xl transition-colors"
       >
+        Terminate Room
+      </button>
+    </header>
         
-        {message && <div className="text-green-500 mb-4 text-2xl">{message}</div>}
+    {error && <div className="text-red-500 mb-4">{error}</div>}
   
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-  
+    {message && <div className="text-green-500 mb-4 text-2xl">{message.winnerMessage}</div>}
+
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
       <div>
         <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Game Info</h2>
