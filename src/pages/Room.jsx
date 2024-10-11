@@ -11,6 +11,7 @@ const Room = () => {
   const [selectedCards, setSelectedCards] = useState([]);
   const [selectedAnswerCards, setSelectedAnswerCards] = useState([]);
   const [droppingCards, setDroppingCards] = useState([]);
+  const [message, setMessage] = useState('');
   const [showSuitSelector, setShowSuitSelector] = useState(false);
   const [showQuestionAnswer, setShowQuestionAnswer] = useState(false);
   const [awaitingAceDrops, setAwaitingAceDrops] = useState(false);
@@ -24,6 +25,9 @@ const Room = () => {
       console.log('Room Updated')
       setRoom(response.data.clientRoom);
       setAwaitingAceDrops(response.data.clientRoom.awaitingAceDrops || false);
+      if (!response.data.clientRoom) {
+        setMessage(response.data.winnerMessage)
+      };
     } catch (err) {
       setError('Failed to fetch room details');
       console.error('Error fetching room details:', err);
@@ -174,11 +178,10 @@ const Room = () => {
         onClick={terminateRoom}
         className="bg-transparent border-2 border-[#D83149] text-[#D83149] hover:bg-opacity-10 hover:bg-gray-300 font-bold py-2 px-4 rounded-xl transition-colors"
       >
-        Terminate Room
-      </button>
-    </header>
-    
-    {error && <div className="text-red-500 mb-4">{error}</div>}
+        
+        {message && <div className="text-green-500 mb-4 text-2xl">{message}</div>}
+  
+        {error && <div className="text-red-500 mb-4">{error}</div>}
   
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
       <div>
