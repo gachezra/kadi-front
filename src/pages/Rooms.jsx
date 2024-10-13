@@ -115,32 +115,18 @@ const Rooms = () => {
           <div className="flex-1">
             <label className="block mb-2 text-sm font-medium">Number of Players</label>
             <input 
-              type="text" 
+              type="number" 
               value={numPlayers} 
-              onChange={(e) => {
-                const inputValue = e.target.value;
-                if (/^\d+$/.test(inputValue)) {
-                  setNumPlayers(Number(inputValue));
-                } else {
-                  alert('Please enter a valid number');
-                }
-              }}
+              onChange={(e) => {setNumPlayers}
               className="w-full p-3 bg-transparent border-b dark:border-gray-600 border-gray-300 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-300 transition-all"
             />
           </div>
           <div className="flex-1">
             <label className="block mb-2 text-sm font-medium">Cards to Deal</label>
             <input 
-              type="text" 
+              type="number" 
               value={numToDeal} 
-              onChange={(e) => {
-                const inputValue = e.target.value;
-                if (/^\d+$/.test(inputValue)) {
-                  setNumToDeal(Number(inputValue));
-                } else {
-                  alert('Please enter a valid number');
-                }
-              }}
+              onChange={(e) => {setNumToDeal}
               className="w-full p-3 bg-transparent border-b dark:border-gray-600 border-gray-300 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-300 transition-all"
             />
           </div>
