@@ -20,6 +20,12 @@ const Sidebar = () => {
     setIsLoggedIn(!!userId)
   }, [])
 
+const logout = () => {
+  localStorage.removeItem('toke');
+  localStorage.removeItem('uid');
+  localStorage.removeItem('avatarImage');
+};
+
   const linkClass = (path) => `
     flex items-center gap-x-2 p-3 text-base font-normal rounded-lg cursor-pointer
     dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700
@@ -82,7 +88,7 @@ const Sidebar = () => {
               </>
             ) : (
               <li>
-                <Link to="/signin" className={linkClass('/signin')}>
+                <Link onClick={() => logout()} className={linkClass('/signin')}>
                   <SiOpenaccess className="text-xl" title='sign up' />
                   <span className={!open ? 'hidden' : 'block'}>Sign In / Sign Up</span>
                 </Link>
@@ -115,7 +121,10 @@ const Sidebar = () => {
               <Link to="/profile" onClick={() => setMobileMenu(false)}>
                 <span className={linkClass('/profile')}>Profile</span>
               </Link>
-              <Link to="/logout" onClick={() => setMobileMenu(false)}>
+              <Link to="/logout" onClick={() => {
+                setMobileMenu(false)
+                logout()
+              }}>
                 <span className={linkClass('/logout')}>Log Out</span>
               </Link>
             </>
