@@ -117,7 +117,7 @@ const Rooms = () => {
             <input 
               type="number" 
               value={numPlayers} 
-              onChange={(e) => {setNumPlayers(e.target.value)}
+              onChange={(e) => setNumPlayers(e.target.value)}
               className="w-full p-3 bg-transparent border-b dark:border-gray-600 border-gray-300 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-300 transition-all"
             />
           </div>
@@ -126,7 +126,7 @@ const Rooms = () => {
             <input 
               type="number" 
               value={numToDeal} 
-              onChange={(e) => {setNumToDeal(e.target.value)}
+              onChange={(e) => setNumToDeal(e.target.value)}
               className="w-full p-3 bg-transparent border-b dark:border-gray-600 border-gray-300 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-300 transition-all"
             />
           </div>
