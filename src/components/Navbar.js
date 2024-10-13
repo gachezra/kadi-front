@@ -14,7 +14,7 @@ const Navbar = () => {
           </Link>
         </div>
 
-        <div className='flex justify-end pr-4'>
+        <div className='flex justify-end'>
           <Toggle />
         </div>
       </div>

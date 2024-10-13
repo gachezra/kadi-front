@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from "react-router-dom";
-import { FaGoogle } from "react-icons/fa";
+// import { FaGoogle } from "react-icons/fa";
 import axios from 'axios';
 import { loginRoute } from '../utils/APIRoutes'
 
@@ -17,9 +17,9 @@ const Login = () => {
     }
   }, [navigate]);
 
-  const handleGoogleSignin = () => {
-    // TODO: Implement Google Sign-In
-  };
+  // const handleGoogleSignin = () => {
+  //   // TODO: Implement Google Sign-In
+  // };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,7 +43,7 @@ const Login = () => {
         <div className="main bg-gray-200  rounded-lg shadow-md p-10 transition-transform w-full mx-4 max-w-md text-center">
           <h1 className="text-green-600 text-3xl">NikoKadi</h1>
           <h3 className="text-lg">Login to your account</h3>
-          <div className="my-4 flex justify-center">
+          {/* <div className="my-4 flex justify-center">
             <button
               onClick={handleGoogleSignin}
               type="button"
@@ -56,7 +56,7 @@ const Login = () => {
             <p className="mx-4 mb-0 text-center font-semibold text-slate-500">
               Or
             </p>
-          </div>
+          </div> */}
           <form onSubmit={handleSubmit}>
             <label htmlFor="email" className="block mt-4 mb-2 text-left  text-gray-700 font-bold">
               Email:

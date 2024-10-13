@@ -69,9 +69,9 @@ const Profile = () => {
   };
 
   if (!userData || !gameStats) return (
-    <div className="container mx-auto px-4 py-8 bg-[#f7faff] dark:bg-[#0a0c10] min-h-screen animate-pulse text-[#1a202c] dark:text-[#e2e8f0] rounded-lg shadow-lg overflow-hidden transition-all duration-200" style={{ fontFamily: "Ubuntu Mono" }}>
+    <div className="container flex flex-col md:flex-row mx-auto px-4 py-8 bg-[#f7faff] dark:bg-[#0a0c10] min-h-screen items-center justify-center text-center animate-pulse text-[#1a202c] dark:text-[#e2e8f0] rounded-lg shadow-lg overflow-hidden transition-all duration-200" style={{ fontFamily: "Ubuntu Mono" }}>
       {/* User Info Skeleton */}
-      <div className="md:w-1/4 md:h-1/3 mb-8 bg-[#ffffff] dark:bg-[#1c1e21] h-auto shadow-xl rounded-lg p-6 flex flex-col items-center animate-pulse">
+      <div className="md:w-1/4 w-full md:h-auto mb-8 bg-[#ffffff] dark:bg-[#1c1e21] shadow-xl rounded-lg p-6 flex flex-col items-center animate-pulse">
         <div className="w-40 h-40 rounded-full bg-[#e2e8f0] dark:bg-[#2d3748] mb-4"></div>
         <div className="w-20 h-4 bg-[#e2e8f0] dark:bg-[#2d3748] rounded mb-2"></div>
         <div className="w-32 h-4 bg-[#e2e8f0] dark:bg-[#2d3748] rounded mb-4"></div>
@@ -79,7 +79,7 @@ const Profile = () => {
       </div>
 
       {/* Game Stats Skeleton */}
-      <div className="md:w-3/4 md:ml-6 bg-[#ffffff] dark:bg-[#1c1e21] shadow-lg rounded-lg p-6 animate-pulse">
+      <div className="md:w-3/4 w-full md:ml-6 bg-[#ffffff] dark:bg-[#1c1e21] shadow-lg rounded-lg p-6 animate-pulse">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center">
@@ -123,8 +123,8 @@ const Profile = () => {
   );
 
   return (
-    <div className="mx-auto bg-[#f7faff] dark:bg-[#0a0c10] text-[#1a202c] dark:text-[#e2e8f0] rounded-lg shadow-lg overflow-hidden mt-5 p-4 transition-all duration-200" style={{ fontFamily: "Ubuntu Mono" }}>
-      <div className="md:w-1/4 md:h-1/3 mb-8 bg-[#ffffff] dark:bg-[#1c1e21] h-auto shadow-xl rounded-lg p-6 flex flex-col items-center">
+    <div className="flex flex-col md:flex-row mx-auto justify-center text-center bg-[#f7faff] dark:bg-[#0a0c10] text-[#1a202c] dark:text-[#e2e8f0] items-center rounded-lg shadow-lg overflow-hidden mt-5 p-4 transition-all duration-200" style={{ fontFamily: "Ubuntu Mono" }}>
+      <div className="md:w-1/4 w-full md:h-auto mb-8 bg-[#ffffff] dark:bg-[#1c1e21] h-auto shadow-xl rounded-lg p-6 flex flex-col items-center">
         <img
           src={`data:image/svg+xml;base64,${userData.avatar}`}
           alt="User Avatar"
@@ -169,7 +169,7 @@ const Profile = () => {
         )}
       </div>
 
-      <div className="md:w-3/4 md:ml-6 bg-[#ffffff] dark:bg-[#1c1e21] shadow-lg rounded-lg p-6">
+      <div className="md:w-3/4 w-full md:ml-6 bg-[#ffffff] dark:bg-[#1c1e21] shadow-lg rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center">
             <GiCardAceSpades className="text-4xl text-[#e53e3e] dark:text-[#fc8181] mr-2" />

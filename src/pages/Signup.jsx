@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from "react-router-dom";
-import { FaGoogle } from "react-icons/fa";
+// import { FaGoogle } from "react-icons/fa";
 import axios from 'axios';
 import { registerRoute } from '../utils/APIRoutes';
 
@@ -40,25 +40,25 @@ const Signup = () => {
         password,
     })
     // On success, redirect to login
-    navigate('/login');
+    navigate('/signin');
   };
 
-    const handleGoogleSignin = async () => {
-        // try {
-        //     await googleLogin();
-        //     navigate("/account");
-        // } catch (err) {
-        //     setError(err.message);
-        //     console.log(err.message);
-        // }
-    };
+    // const handleGoogleSignin = async () => {
+    //     try {
+    //         await googleLogin();
+    //         navigate("/account");
+    //     } catch (err) {
+    //         setError(err.message);
+    //         console.log(err.message);
+    //     }
+    // };
 
     return (
         <div className="flex items-center justify-center min-h-screen dark:bg-[#000614] bg-[#ebf1ff] rounded-lg shadow-lg">
             <div className="main bg-gray-200 rounded-lg shadow-md p-10 mx-4 transition-transform w-full max-w-md text-center">
                 <h1 className="text-green-600 text-3xl">NikoKadi</h1>
                 <h3 className="text-lg">Create a new account</h3>
-                <div className="my-4 flex justify-center">
+                {/* <div className="my-4 flex justify-center">
                     <button
                         onClick={handleGoogleSignin}
                         type="button"
@@ -71,7 +71,7 @@ const Signup = () => {
                     <p className="mx-4 mb-0 text-center font-semibold text-slate-500">
                         Or
                     </p>
-                </div>
+                </div> */}
                 <form onSubmit={handleSubmit}>
                     <label htmlFor="username" className="block mt-4 mb-2 text-left text-gray-700 font-bold">
                         Username:

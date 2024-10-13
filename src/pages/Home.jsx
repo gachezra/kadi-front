@@ -43,12 +43,12 @@ const Home = () => {
                     </Link>
                 </div>
 
-                <h1 className="items-center justify-center text-center text-black dark:text-white font-bold text-3xl mt-8 mb-4">
+                {/* <h1 className="items-center justify-center text-center text-black dark:text-white font-bold text-3xl mt-8 mb-4">
                     Players Stats
-                </h1>
+                </h1> */}
 
                 {/* Skeleton Loading for Player Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-4 py-8">
+                {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-4 py-8">
                     {[1, 2, 3].map((_, index) => (
                         <div key={index} className="flex flex-col items-center justify-center p-4 rounded-lg shadow-lg bg-gray-300 dark:bg-gray-800 animate-pulse">
                             <div className="w-24 h-24 bg-gray-400 dark:bg-gray-600 rounded-full mb-4"></div>
@@ -56,11 +56,11 @@ const Home = () => {
                             <div className="w-1/2 h-6 bg-gray-400 dark:bg-gray-600 rounded"></div>
                         </div>
                     ))}
-                </div>
+                </div> */}
 
                 {/* Sign Up / Sign In Section */}
                 {status && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-5">
+                    <div className="grid grid-cols-1 items-center justify-center text-center md:grid-cols-2 gap-8 p-5">
                         <div className="flex flex-col justify-center text-center">
                             <h2 className="text-3xl font-bold text-black dark:text-[#f5f9ff] mb-4">
                                 Join the Adventure
