@@ -14,16 +14,17 @@ const Sidebar = () => {
   const [mobileMenu, setMobileMenu] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const location = useLocation()
+  const userId = localStorage.getItem('uid');
 
   useEffect(() => {
-    const userId = localStorage.getItem('uid');
     setIsLoggedIn(!!userId)
-  }, [])
+  }, [userId])
 
 const logout = () => {
-  localStorage.removeItem('toke');
+  localStorage.removeItem('token');
   localStorage.removeItem('uid');
   localStorage.removeItem('avatarImage');
+  setIsLoggedIn(false);
 };
 
   const linkClass = (path) => `
@@ -80,7 +81,7 @@ const logout = () => {
                   </Link>
                 </li>
                 <li className="mt-6">
-                  <Link to="/logout" className={linkClass('/logout')}>
+                  <Link to='/' onClick={() => logout()} className={linkClass('/logout')}>
                     <FiLogOut className="text-xl" title='Logout' />
                     <span className={!open ? 'hidden' : 'block'}>Log Out</span>
                   </Link>
@@ -88,7 +89,7 @@ const logout = () => {
               </>
             ) : (
               <li>
-                <Link onClick={() => logout()} className={linkClass('/signin')}>
+                <Link to='/signin' className={linkClass('/signin')}>
                   <SiOpenaccess className="text-xl" title='sign up' />
                   <span className={!open ? 'hidden' : 'block'}>Sign In / Sign Up</span>
                 </Link>
@@ -121,7 +122,7 @@ const logout = () => {
               <Link to="/profile" onClick={() => setMobileMenu(false)}>
                 <span className={linkClass('/profile')}>Profile</span>
               </Link>
-              <Link to="/logout" onClick={() => {
+              <Link to='/' onClick={() => {
                 setMobileMenu(false)
                 logout()
               }}>

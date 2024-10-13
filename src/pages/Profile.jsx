@@ -15,6 +15,7 @@ const Profile = () => {
     avatar: ''
   });
   const navigate = useNavigate();
+  const userId = localStorage.getItem('uid');
 
   const fetchUserData = useCallback(async () => {
     const userId = localStorage.getItem('uid');
@@ -42,8 +43,11 @@ const Profile = () => {
   }, [navigate]);
 
   useEffect(() => {
+    if (!userId) {
+      navigate('/signin');
+    };
     fetchUserData();
-  }, [fetchUserData]);
+  }, [fetchUserData, userId]);
 
   const handleEditToggle = () => {
     setIsEditing(!isEditing);
