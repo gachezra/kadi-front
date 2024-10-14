@@ -205,7 +205,7 @@ const Room = () => {
         </button>
         
         <a
-          href={`whatsapp://send?text=Let's play NikoKadi!%0AJoin my room:%0ARoom Code: **${room.roomCode}** %0ARoom ID: **${room.roomId}** %0Ahttps://kadi.pexmon.one/rooms`}
+          href={`whatsapp://send?text=Let's play NikoKadi!%0AJoin my room:%0ARoom Code: *${room.roomCode}*%0ARoom ID: *${room.roomId}*%0Ahttps://kadi.pexmon.one/rooms`}
           className="flex items-center text-[#25D366] hover:text-opacity-80 transition-colors duration-200"
           title="Share room details"
         >
