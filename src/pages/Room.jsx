@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { getRoomDetailsRoute, makeMoveRoute, terminateRoomRoute, answerQuestionCardRoute, changeSuitRoute, dropAceRoute } from '../utils/APIRoutes';
 import Card from '../components/Card';
+import { FaWhatsapp } from "react-icons/fa";
 // import ChatComponent from '../chat/chatComponent';
 
 const Room = () => {
@@ -190,15 +191,30 @@ const Room = () => {
 
   return (
   <div className="mx-auto dark:bg-[#0a0c10] bg-[#f7faff] text-gray-800 dark:text-gray-200 rounded-lg shadow-lg overflow-hidden mt-5 p-4 transition-all duration-200" style={{ fontFamily: "Ubuntu Mono" }}>
-    <header className="flex items-center justify-between mb-4">
-      <h1 className="text-xl font-bold text-[#F5F5F5]">Room: {room.roomCode}</h1>
-      <button
-        onClick={terminateRoom}
-        className="bg-transparent border-2 border-[#D83149] text-[#D83149] hover:bg-opacity-10 hover:bg-gray-300 font-bold py-2 px-4 rounded-xl transition-colors"
-      >
-        Terminate Room
-      </button>
+    <header className="flex flex-col sm:flex-row items-center justify-between mb-4 bg-gray-800 p-4 rounded-lg shadow-md">
+      <h1 className="text-lg sm:text-xl font-bold text-[#F5F5F5] mb-2 sm:mb-0">
+        Room: {room.roomCode}
+      </h1>
+      
+      <div className="flex items-center gap-4">
+        <button
+          onClick={terminateRoom}
+          className="bg-transparent border-2 border-[#D83149] text-[#D83149] hover:bg-[#D83149] hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+        >
+          Terminate Room
+        </button>
+        
+        <a
+          href={`whatsapp://send?text=Let's play NikoKadi!%0AJoin my room:%0ARoom Code: ${room.roomCode}%0ARoom ID: ${room.roomId}%0https://kadi.pexmon.one/rooms`}
+          className="flex items-center text-[#25D366] hover:text-opacity-80 transition-colors duration-200"
+          title="Share room details"
+        >
+          <span className="mr-2 text-sm sm:text-base">Share room details</span>
+          <FaWhatsapp size={24} />
+        </a>
+      </div>
     </header>
+
         
     {error && <div className="text-red-500 mb-4">{error}</div>}
   
