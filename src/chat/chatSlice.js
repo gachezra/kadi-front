@@ -6,7 +6,7 @@ let socket;
 export const connectSocket = createAsyncThunk(
   'chat/connectSocket',
   async (_, { dispatch }) => {
-    socket = io('https://kadi.pexmon.one'); // Replace with your server URL
+    socket = io('https://niko-kadi.onrender.com'); // Replace with your server URL
     console.log('Socket connected');
     
     socket.on('newMessage', (message) => {
