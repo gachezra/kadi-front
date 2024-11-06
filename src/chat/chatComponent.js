@@ -195,17 +195,17 @@ const ChatComponent = ({ roomId, userId, username }) => {
         <button
           type="submit"
           className="bg-blue-500 px-4 py-3 ml-3 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200"
-        >
+        > 
           Send
         </button>
       </form>
 
-      <button
+      {* <button
         onClick={isAudioStreaming ? stopCall : startCall}
         className="mt-4 mx-4 bg-transparent border-2 border-green-500 text-green-500 py-3 px-6 rounded-xl hover:bg-gray-300 hover:bg-opacity-10 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500"
       >
         {isAudioStreaming ? 'Stop Audio' : 'Start Audio'}
-      </button>
+      </button> *}
 
       <div className="audio-streams mt-4">
         {Object.entries(audioStreams).map(([streamUserId, stream]) => (
