@@ -200,8 +200,12 @@ const Room = () => {
   }
 
   const currentPlayer = room.playerList.find(player => player.userId === userId);
-  const currentPlayerTurn = room.playerList[room.currentPlayer];
   const username = currentPlayer.username;
+  
+  const playerIndex = room.playerList.findIndex(player => player.userId === userId);
+  const previousPlayerIndex = room.gameDirection === 'forward'
+    ? (room.currentPlayer - 1 + room.numPlayers) % room.numPlayers
+    : (room.currentPlayer + 1) % room.numPlayers;
 
   return (
   <div className="mx-auto dark:bg-[#0a0c10] bg-[#f7faff] text-gray-800 dark:text-gray-200 rounded-lg shadow-lg overflow-hidden mt-5 p-4 transition-all duration-200" style={{ fontFamily: "Ubuntu Mono" }}>
@@ -240,7 +244,7 @@ const Room = () => {
         <div className="bg-[#1C1C1E] p-6 rounded-lg shadow-xl">
           <p className="text-[#F5F5F5]">Players: {room.numPlayers}</p>
           <p className="text-[#F5F5F5]">Cards Dealt: {room.numToDeal}</p>
-          <p className="text-[#F5F5F5]">Current Player: {currentPlayerTurn ? currentPlayer.username : 'Unknown'}</p>
+          <p className="text-[#F5F5F5]">Current Player: {room.playerList[room.currentPlayer].username}</p>
           <p className="text-[#F5F5F5]">Game Direction: {room.gameDirection}</p>
           <p className="text-[#F5F5F5]">Deck Size: {room.deckSize}</p>
         </div>
@@ -396,19 +400,17 @@ const Room = () => {
       </div>
 
       <div className="flex justify-center items-center mt-4">
-        <button
-          onClick={() => handleIsCard()}
-          className={`font-bold py-2 p-4 rounded-xl transition-colors ${isKadi ? 
-            'bg-[#D83149] text-white' : 
-            'bg-transparent border-2 border-[#D83149] hover:bg-opacity-10 hover:bg-gray-300 text-[#D83149]'
-          }`}
-          disabled={
-            !currentPlayer || 
-            room.currentPlayer !== room.playerList.findIndex(p => p.userId === userId)
-          }
-        >
-          NikoKadi
-        </button>
+        {playerIndex === previousPlayerIndex && (
+          <button
+            onClick={() => handleIsCard()}
+            className={`font-bold py-2 p-4 rounded-xl transition-colors cursor-pointer ${isKadi ? 
+              'bg-[#D83149] text-white' : 
+              'bg-transparent border-2 border-[#D83149] hover:bg-opacity-10 hover:bg-gray-300 text-[#D83149]'
+            }`}
+          >
+            NikoKadi
+          </button>
+        )}
       </div>
     </div>
     <ChatComponent roomId={roomId} userId={userId} username={username}/>
