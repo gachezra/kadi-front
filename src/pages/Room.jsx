@@ -13,6 +13,7 @@ const Room = () => {
   const [selectedAnswerCards, setSelectedAnswerCards] = useState([]);
   const [droppingCards, setDroppingCards] = useState([]);
   const [message, setMessage] = useState('');
+  const [isKadi, setIsKadi] = useState(null);
   const [showSuitSelector, setShowSuitSelector] = useState(false);
   const [showQuestionAnswer, setShowQuestionAnswer] = useState(false);
   const [awaitingAceDrops, setAwaitingAceDrops] = useState(false);
@@ -30,6 +31,7 @@ const Room = () => {
         return;
       };
       setRoom(response.data.clientRoom);
+      setIsKadi(response.data.clientRoom.isCard.includes(userId));
       setAwaitingAceDrops(response.data.clientRoom.awaitingAceDrops || false);
     } catch (err) {
       setError('Failed to fetch room details');
@@ -112,6 +114,18 @@ const Room = () => {
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to drop ace');
       console.error('Error dropping ace:', error);
+    }
+  };
+
+  const handleIsCard = async () => {
+    try {
+      await axios.post(isCardRoute(roomId), {
+        userId
+      })
+      setIsKadi(!isKadi);
+    } catch (e) {
+      setError(e.response?.data?.error || 'Failed to set NikoKadi');
+      console.error('Error setting NikoKadi:', e);
     }
   };
 
@@ -238,6 +252,7 @@ const Room = () => {
                 <p className="text-[#F5F5F5]">{player.username}</p>
                 <p className="text-[#B0A7B3]">Cards: {player.hand.length}</p>
                 {room.currentPlayer === index && <p className="text-[#FFD700]">Current Turn</p>}
+                {room.isCard.includes(player.userId) && <p className='text-red-700'>NikoKadi</p>}
               </div>
             ))}
           </div>
@@ -353,21 +368,46 @@ const Room = () => {
       </div>
     )}
   
-    <div className="mb-8">
-      <div className="flex gap-4 mx-auto text-center justify-center items-center ">
+  <div className="mb-8 text-center">
+      <div className="flex gap-4 justify-center items-center">
         <button
           onClick={() => handleMove('drop')}
           className="bg-transparent border-2 border-[#1AD95D] hover:bg-opacity-10 hover:bg-gray-300 text-[#1AD95D] font-bold py-2 p-4 rounded-xl transition-colors"
-          disabled={!currentPlayer || !currentPlayer.hand || selectedCards.length === 0 || room.currentPlayer !== room.playerList.findIndex(p => p.userId === userId)}
+          disabled={
+            !currentPlayer || 
+            !currentPlayer.hand || 
+            selectedCards.length === 0 || 
+            room.currentPlayer !== room.playerList.findIndex(p => p.userId === userId)
+          }
         >
           Drop
         </button>
         <button
           onClick={() => handleMove('pick')}
           className="bg-transparent border-2 border-[#F2CC0F] hover:bg-opacity-10 hover:bg-gray-300 text-[#F2CC0F] font-bold py-2 p-4 rounded-xl transition-colors"
-          disabled={!currentPlayer || !currentPlayer.hand || room.currentPlayer !== room.playerList.findIndex(p => p.userId === userId)}
+          disabled={
+            !currentPlayer || 
+            !currentPlayer.hand || 
+            room.currentPlayer !== room.playerList.findIndex(p => p.userId === userId)
+          }
         >
           Pick
+        </button>
+      </div>
+
+      <div className="flex justify-center items-center mt-4">
+        <button
+          onClick={() => handleIsCard()}
+          className={`font-bold py-2 p-4 rounded-xl transition-colors ${isKadi ? 
+            'bg-[#D83149] text-white' : 
+            'bg-transparent border-2 border-[#D83149] hover:bg-opacity-10 hover:bg-gray-300 text-[#D83149]'
+          }`}
+          disabled={
+            !currentPlayer || 
+            room.currentPlayer !== room.playerList.findIndex(p => p.userId === userId)
+          }
+        >
+          NikoKadi
         </button>
       </div>
     </div>
