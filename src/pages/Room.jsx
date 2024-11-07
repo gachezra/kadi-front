@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { getRoomDetailsRoute, makeMoveRoute, terminateRoomRoute, answerQuestionCardRoute, changeSuitRoute, dropAceRoute } from '../utils/APIRoutes';
+import { getRoomDetailsRoute, makeMoveRoute, terminateRoomRoute, answerQuestionCardRoute, changeSuitRoute, dropAceRoute, isCardRoute } from '../utils/APIRoutes';
 import Card from '../components/Card';
 import { FaWhatsapp } from "react-icons/fa";
 import ChatComponent from '../chat/chatComponent';

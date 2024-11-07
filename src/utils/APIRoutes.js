@@ -20,6 +20,7 @@ export const getGameDataRoute = (roomId) => `${host}/api/rooms/${roomId}/gameDat
 export const getRoomDetailsRoute = (roomId) => `${host}/api/rooms/${roomId}`;
 
 export const makeMoveRoute = (roomId) => `${host}/api/rooms/${roomId}/moves`;
+export const isCardRoute = (roomId) => `${host}/api/rooms/${roomId}/nikokadi`;
 
 export const changeSuitRoute = (roomId) => `${host}/api/rooms/${roomId}/changeSuit`;
 export const answerQuestionCardRoute = (roomId) => `${host}/api/rooms/${roomId}/answerQuestion`;
