@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback} from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   connectSocket,
@@ -10,28 +10,30 @@ import {
   removePeerConnection,
   setAudioStream,
   removeAudioStream,
-  socket
+  socket,
 } from './chatSlice';
 
 const ChatComponent = ({ roomId, userId, username }) => {
   const dispatch = useDispatch();
-  const { connected, messages, audioStreams, peers, peerConnections } = useSelector((state) => state.chat);
+  const { connected, messages, audioStreams, peers } = useSelector((state) => state.chat);
   const [inputMessage, setInputMessage] = useState('');
   const [localStream, setLocalStream] = useState(null);
   const [isAudioStreaming, setIsAudioStreaming] = useState(false);
   const peerConnectionsRef = useRef({});
 
+  // Establish socket connection
   useEffect(() => {
     if (!connected) {
       dispatch(connectSocket());
     }
   }, [connected, dispatch]);
 
+  // Join and leave room
   useEffect(() => {
     if (connected && roomId && userId) {
       dispatch(joinRoom({ roomId, userId, username }));
-      console.log('Chat connected');
     }
+
     return () => {
       if (roomId && userId) {
         dispatch(leaveRoom({ roomId, userId, username }));
@@ -39,20 +41,14 @@ const ChatComponent = ({ roomId, userId, username }) => {
     };
   }, [connected, roomId, userId, dispatch, username]);
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (inputMessage.trim()) {
-      dispatch(sendMessage({ roomId, userId, message: inputMessage, username }));
-      setInputMessage('');
-    }
-  };
-
+  // Fetch peers on connection
   useEffect(() => {
     if (connected && roomId) {
       dispatch(requestPeers({ roomId }));
     }
   }, [connected, roomId, dispatch]);
 
+  // WebRTC signaling handlers
   useEffect(() => {
     if (connected) {
       socket.on('offer', handleOffer);
@@ -67,30 +63,25 @@ const ChatComponent = ({ roomId, userId, username }) => {
     }
   }, [connected]);
 
-  console.log("Current audio streams:", audioStreams);
-
-  const createPeerConnection = (peerId) => {
+  // Create a WebRTC peer connection
+  const createPeerConnection = useCallback((peerId) => {
     try {
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       });
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log("Sending ICE candidate to:", peerId);
           socket.emit('iceCandidate', { target: peerId, candidate: event.candidate });
         }
       };
 
       pc.ontrack = (event) => {
-        console.log(`Received track from ${peerId}:`, event.streams[0]);
-        console.log(`Track kind: ${event.track.kind}`);
         dispatch(setAudioStream({ userId: peerId, stream: event.streams[0] }));
       };
 
       if (localStream) {
-        console.log("Adding local stream to peer connection");
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
       }
 
       peerConnectionsRef.current[peerId] = pc;
@@ -99,23 +90,19 @@ const ChatComponent = ({ roomId, userId, username }) => {
     } catch (error) {
       console.error('Error creating peer connection:', error);
     }
-  };
+  }, [dispatch, localStream]);
 
   const startCall = async () => {
     try {
-      console.log("Starting call...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log("Got local stream:", stream);
       setLocalStream(stream);
       setIsAudioStreaming(true);
 
       peers.forEach(async (peerId) => {
-        console.log("Creating peer connection for:", peerId);
         const pc = createPeerConnection(peerId);
         if (pc) {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          console.log("Sending offer to:", peerId);
           socket.emit('offer', { target: peerId, sdp: offer });
         }
       });
@@ -126,64 +113,58 @@ const ChatComponent = ({ roomId, userId, username }) => {
 
   const stopCall = () => {
     if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+      localStream.getTracks().forEach((track) => track.stop());
       setLocalStream(null);
     }
     setIsAudioStreaming(false);
-    Object.keys(peerConnectionsRef.current).forEach(peerId => {
-      peerConnectionsRef.current[peerId].close();
+
+    Object.keys(peerConnectionsRef.current).forEach((peerId) => {
+      const pc = peerConnectionsRef.current[peerId];
+      if (pc) pc.close();
       delete peerConnectionsRef.current[peerId];
       dispatch(removePeerConnection(peerId));
       dispatch(removeAudioStream(peerId));
     });
   };
 
-  const handleOffer = useCallback(async ({ source, sdp }) => {
-    try {
-      console.log(`Received offer from ${source}`);
+  const handleOffer = useCallback(
+    async ({ source, sdp }) => {
       const pc = createPeerConnection(source);
       if (pc) {
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        console.log(`Set remote description for ${source}`);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        console.log(`Created and set local description (answer) for ${source}`);
         socket.emit('answer', { target: source, sdp: answer });
-        console.log(`Sent answer to ${source}`);
       }
-    } catch (error) {
-      console.error('Error handling offer:', error);
-    }
-  }, [createPeerConnection]);
-  
+    },
+    [createPeerConnection]
+  );
+
   const handleAnswer = useCallback(async ({ source, sdp }) => {
-    try {
-      console.log(`Received answer from ${source}`);
-      const pc = peerConnectionsRef.current[source];
-      if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        console.log(`Set remote description for ${source}`);
-      }
-    } catch (error) {
-      console.error('Error handling answer:', error);
-    }
-  }, []);
-  
-  const handleIceCandidate = useCallback(({ source, candidate }) => {
-    try {
-      console.log(`Received ICE candidate from ${source}`);
-      const pc = peerConnectionsRef.current[source];
-      if (pc) {
-        pc.addIceCandidate(new RTCIceCandidate(candidate));
-        console.log(`Added ICE candidate for ${source}`);
-      }
-    } catch (error) {
-      console.error('Error handling ICE candidate:', error);
+    const pc = peerConnectionsRef.current[source];
+    if (pc) {
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
     }
   }, []);
 
+  const handleIceCandidate = useCallback(({ source, candidate }) => {
+    const pc = peerConnectionsRef.current[source];
+    if (pc) {
+      pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+  }, []);
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (inputMessage.trim()) {
+      dispatch(sendMessage({ roomId, userId, message: inputMessage, username }));
+      setInputMessage('');
+    }
+  };
+
   return (
     <div className="w-full h-[calc(100vh-8rem)] bg-[#1C1C1E] rounded-lg shadow-xl overflow-hidden flex flex-col">
+      {/* Input and send button */}
       <form onSubmit={handleSendMessage} className="flex mt-4 px-4">
         <input
           type="text"
@@ -195,28 +176,29 @@ const ChatComponent = ({ roomId, userId, username }) => {
         <button
           type="submit"
           className="bg-blue-500 px-4 py-3 ml-3 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200"
-        > 
+        >
           Send
         </button>
       </form>
 
-      {/* <button
+      {/* Audio streaming control */}
+      <button
         onClick={isAudioStreaming ? stopCall : startCall}
         className="mt-4 mx-4 bg-transparent border-2 border-green-500 text-green-500 py-3 px-6 rounded-xl hover:bg-gray-300 hover:bg-opacity-10 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500"
       >
         {isAudioStreaming ? 'Stop Audio' : 'Start Audio'}
-      </button> */}
+      </button>
 
+      {/* Audio streams */}
       <div className="audio-streams mt-4">
         {Object.entries(audioStreams).map(([streamUserId, stream]) => (
           <div key={streamUserId}>
-            <p>Audio stream from user: {streamUserId}</p>
+            <p className="text-white">Audio stream from user: {streamUserId}</p>
             <audio
               autoPlay
-              ref={el => {
+              ref={(el) => {
                 if (el) {
                   el.srcObject = stream;
-                  console.log(`Set srcObject for user ${streamUserId}`);
                 }
               }}
             />
@@ -224,11 +206,14 @@ const ChatComponent = ({ roomId, userId, username }) => {
         ))}
       </div>
 
+      {/* Chat messages */}
       <div className="flex-1 overflow-y-auto p-4 bg-gray-800 rounded-lg shadow-lg">
         {messages.map((msg, index) => (
           <div
             key={index}
-            className={`p-3 my-2 rounded-md shadow-md ${msg.userId === userId ? 'bg-blue-500 ml-auto' : 'bg-gray-700 mr-auto'}`}
+            className={`p-3 my-2 rounded-md shadow-md ${
+              msg.userId === userId ? 'bg-blue-500 ml-auto' : 'bg-gray-700 mr-auto'
+            }`}
           >
             <strong className="block text-sm text-gray-200">{msg.username}:</strong>
             <span className="block text-gray-100">{msg.message}</span>
