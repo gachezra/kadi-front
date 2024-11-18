@@ -3,102 +3,61 @@ import io from 'socket.io-client';
 
 let socket;
 
-export const connectSocket = createAsyncThunk('chat/connectSocket', async (_, { dispatch }) => {
-  socket = io('https://your-server-url'); // Replace with your server URL
-  console.log('Socket connected');
-
-  socket.on('offer', ({ source, sdp }) => {
-    dispatch(handleOffer({ source, sdp }));
-  });
-
-  socket.on('answer', ({ source, sdp }) => {
-    dispatch(handleAnswer({ source, sdp }));
-  });
-
-  socket.on('iceCandidate', ({ source, candidate }) => {
-    dispatch(handleIceCandidate({ source, candidate }));
-  });
-
-  socket.on('peerList', (peerList) => {
-    dispatch(setPeers(peerList));
-  });
-
-  return true;
-});
-
-export const joinRoom = createAsyncThunk('chat/joinRoom', async ({ roomId, userId, username }) => {
-  socket.emit('joinRoom', { roomId, userId, username });
-  return { roomId, userId, username };
-});
-
-export const startAudioStream = createAsyncThunk('chat/startAudioStream', async (_, { dispatch, getState }) => {
-  const state = getState().chat;
-
-  // Audio constraints to set bitrate >= 64 kbps
-  const audioConstraints = {
-    audio: {
-      sampleRate: 48000,
-      channelCount: 1,
-      bitrate: 64000, // Set the minimum bitrate
-    },
-  };
-
-  const localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
-
-  dispatch(setAudioStream({ userId: state.userId, stream: localStream }));
-
-  state.peers.forEach((peerId) => {
-    const peerConnection = dispatch(createPeerConnection(peerId));
-    localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
-  });
-});
-
-export const createPeerConnection = (peerId) => (dispatch, getState) => {
-  const peerConnection = new RTCPeerConnection();
-
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit('iceCandidate', { target: peerId, candidate: event.candidate });
-    }
-  };
-
-  peerConnection.ontrack = (event) => {
-    dispatch(setAudioStream({ userId: peerId, stream: event.streams[0] }));
-  };
-
-  peerConnection.createOffer()
-    .then((offer) => peerConnection.setLocalDescription(offer))
-    .then(() => {
-      socket.emit('offer', { target: peerId, sdp: peerConnection.localDescription });
+export const connectSocket = createAsyncThunk(
+  'chat/connectSocket',
+  async (_, { dispatch }) => {
+    socket = io('https://niko-kadi.onrender.com'); // Replace with your server URL
+    console.log('Socket connected');
+    
+    socket.on('newMessage', (message) => {
+      dispatch(addMessage(message));
     });
-
-  return peerConnection;
-};
-
-export const handleOffer = createAsyncThunk('chat/handleOffer', async ({ source, sdp }, { dispatch, getState }) => {
-  const state = getState().chat;
-  const peerConnection = dispatch(createPeerConnection(source));
-
-  await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
-
-  socket.emit('answer', { target: source, sdp: answer });
-});
-
-export const handleAnswer = createAsyncThunk('chat/handleAnswer', async ({ source, sdp }, { getState }) => {
-  const state = getState().chat;
-  const peerConnection = state.peerConnections[source];
-  await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-});
-
-export const handleIceCandidate = createAsyncThunk('chat/handleIceCandidate', async ({ source, candidate }, { getState }) => {
-  const state = getState().chat;
-  const peerConnection = state.peerConnections[source];
-  if (peerConnection) {
-    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    
+    socket.on('userJoined', (data) => {
+      dispatch(addMessage({ userId: 'System', message: `${data.username} joined the room` }));
+    });
+    
+    socket.on('userLeft', (data) => {
+      dispatch(addMessage({ userId: 'System', message: `${data.username} left the room` }));
+    });
+    
+    return true;
   }
-});
+);
+
+export const joinRoom = createAsyncThunk(
+  'chat/joinRoom',
+  async ({ roomId, userId, username }) => {
+    socket.emit('joinRoom', { roomId, userId, username });
+    return { roomId, userId, username };
+  }
+);
+
+export const leaveRoom = createAsyncThunk(
+  'chat/leaveRoom',
+  async ({ roomId, userId, username }) => {
+    socket.emit('leaveRoom', { roomId, userId, username });
+    return { roomId, userId, username };
+  }
+);
+
+export const sendMessage = createAsyncThunk(
+  'chat/sendMessage',
+  async ({ roomId, userId, message, username }) => {
+    socket.emit('sendMessage', { roomId, userId, message, username });
+    return { userId, message, username };
+  }
+);
+
+export const requestPeers = createAsyncThunk(
+  'chat/requestPeers',
+  async ({ roomId }) => {
+    socket.emit('requestPeers', { roomId });
+    return new Promise((resolve) => {
+      socket.once('peerList', (peerList) => resolve(peerList));
+    });
+  }
+);
 
 const chatSlice = createSlice({
   name: 'chat',
@@ -110,20 +69,27 @@ const chatSlice = createSlice({
     messages: [],
     audioStreams: {},
     peers: [],
-    peerConnections: {},
+    peerConnections: {}, // Changed to an object
   },
   reducers: {
+    addMessage: (state, action) => {
+      state.messages.push(action.payload);
+    },
     setAudioStream: (state, action) => {
+      console.log("Setting audio stream for:", action.payload.userId);
       state.audioStreams[action.payload.userId] = action.payload.stream;
-    },
-    setPeers: (state, action) => {
-      state.peers = action.payload;
-    },
-    addPeerConnection: (state, action) => {
-      state.peerConnections[action.payload.peerId] = action.payload.peerConnection;
     },
     removeAudioStream: (state, action) => {
       delete state.audioStreams[action.payload];
+    },
+    addPeerConnection: (state, action) => {
+      state.peerConnections[action.payload] = true;
+    },
+    removePeerConnection: (state, action) => {
+      delete state.peerConnections[action.payload];
+    },
+    setPeers: (state, action) => {
+      state.peers = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -135,11 +101,30 @@ const chatSlice = createSlice({
         state.roomId = action.payload.roomId;
         state.userId = action.payload.userId;
         state.username = action.payload.username;
+      })
+      .addCase(leaveRoom.fulfilled, (state) => {
+        state.roomId = null;
+        state.userId = null;
+        state.username = null;
+        state.messages = [];
+        state.audioStreams = {};
+        state.peers = [];
+        state.peerConnections = {};
+      })
+      .addCase(requestPeers.fulfilled, (state, action) => {
+        state.peers = action.payload;
       });
   },
 });
 
-export const { setAudioStream, setPeers, addPeerConnection, removeAudioStream } = chatSlice.actions;
+export const {
+  addMessage,
+  setAudioStream,
+  removeAudioStream,
+  addPeerConnection,
+  removePeerConnection,
+  setPeers
+} = chatSlice.actions;
 
 export { socket };
 
