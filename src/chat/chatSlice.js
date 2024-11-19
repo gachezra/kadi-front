@@ -6,7 +6,7 @@ let socket;
 export const connectSocket = createAsyncThunk(
   'chat/connectSocket',
   async (_, { dispatch }) => {
-    socket = io('https://niko-kadi.onrender.com'); // Replace with your server URL
+    socket = io('https://niko-kadi-upj5.onrender.com'); // Replace with your server URL
     console.log('Socket connected');
     
     socket.on('newMessage', (message) => {
