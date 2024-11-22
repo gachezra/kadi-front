@@ -4,7 +4,7 @@ import axios from 'axios';
 import { getRoomDetailsRoute, makeMoveRoute, terminateRoomRoute, answerQuestionCardRoute, changeSuitRoute, dropAceRoute, isCardRoute } from '../utils/APIRoutes';
 import Card from '../components/Card';
 import { FaWhatsapp } from "react-icons/fa";
-import ChatComponent from '../chat/chatComponent';
+import ChatRoom from '../chat/ChatRoom';
 
 const Room = () => {
   const { roomId } = useParams();
@@ -238,37 +238,41 @@ const Room = () => {
   
     {message && <div className="text-green-500 mb-4 text-2xl">{message.winnerMessage}</div>}
 
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
-      <div>
-        <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Game Info</h2>
-        <div className="bg-[#1C1C1E] p-6 rounded-lg shadow-xl">
-          <p className="text-[#F5F5F5]">Players: {room.numPlayers}</p>
-          <p className="text-[#F5F5F5]">Cards Dealt: {room.numToDeal}</p>
-          <p className="text-[#F5F5F5]">Current Player: {room.playerList[room.currentPlayer].username}</p>
-          <p className="text-[#F5F5F5]">Game Direction: {room.gameDirection}</p>
-          <p className="text-[#F5F5F5]">Deck Size: {room.deckSize}</p>
-        </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
         <div>
-          <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Players</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {room.playerList.map((player, index) => (
-              <div key={index} className={`p-4 rounded ${player.userId === userId ? 'bg-[#282734]' : 'bg-[#2F2D40]'}`}>
-                <p className="text-[#F5F5F5]">{player.username}</p>
-                <p className="text-[#B0A7B3]">Cards: {player.hand.length}</p>
-                {room.currentPlayer === index && <p className="text-[#FFD700]">Current Turn</p>}
-                {room.isCard.includes(player.userId) && <p className='text-red-700'>NikoKadi</p>}
-              </div>
-            ))}
+          <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Game Info</h2>
+          <div className="bg-[#1C1C1E] p-6 rounded-lg shadow-xl">
+            <p className="text-[#F5F5F5]">Players: {room.numPlayers}</p>
+            <p className="text-[#F5F5F5]">Cards Dealt: {room.numToDeal}</p>
+            <p className="text-[#F5F5F5]">Current Player: {room.playerList[room.currentPlayer].username}</p>
+            <p className="text-[#F5F5F5]">Game Direction: {room.gameDirection}</p>
+            <p className="text-[#F5F5F5]">Deck Size: {room.deckSize}</p>
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Players</h2>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              {room.playerList.map((player, index) => (
+                <div key={index} className={`p-4 rounded ${player.userId === userId ? 'bg-[#282734]' : 'bg-[#2F2D40]'}`}>
+                  <p className="text-[#F5F5F5]">{player.username}</p>
+                  <p className="text-[#B0A7B3]">Cards: {player.hand.length}</p>
+                  {room.currentPlayer === index && <p className="text-[#FFD700]">Current Turn</p>}
+                  {room.isCard.includes(player.userId) && <p className='text-red-700'>NikoKadi</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Top Card</h2>
+          <div className="bg-[#1C1C1E] p-6 rounded-lg shadow-xl flex justify-center items-center">
+            <Card card={room.topCard} />
           </div>
         </div>
       </div>
-      
-      <div>
-        <h2 className="text-xl font-semibold text-[#F5F5F5] mb-4">Top Card</h2>
-        <div className="bg-[#1C1C1E] p-6 rounded-lg shadow-xl flex justify-center items-center">
-          <Card card={room.topCard} />
-        </div>
-      </div>
+
+      <ChatRoom roomId={roomId} userId={userId} username={username} />
     </div>
   
     {showSuitSelector && (
@@ -413,7 +417,6 @@ const Room = () => {
         )}
       </div>
     </div>
-    <ChatComponent roomId={roomId} userId={userId} username={username}/>
   </div>    
   );  
 };
