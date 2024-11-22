@@ -215,12 +215,14 @@ const Room = () => {
       </h1>
       
       <div className="flex items-center gap-4">
-        <button
-          onClick={terminateRoom}
-          className="bg-transparent border-2 border-[#D83149] text-[#D83149] hover:bg-[#D83149] hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
-        >
-          Terminate Room
-        </button>
+        {room.owner === userId && (
+          <button
+            onClick={terminateRoom}
+            className="bg-transparent border-2 border-[#D83149] text-[#D83149] hover:bg-[#D83149] hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+          >
+            Terminate Room
+          </button>
+        )}
         
         <a
           href={`whatsapp://send?text=Let's play NikoKadi!%0AJoin my room:%0ARoom Code: *${room.roomCode}*%0ARoom ID: *${room.roomId}*%0Ahttps://kadi.pexmon.one/rooms`}
