@@ -1,4 +1,4 @@
-export const host = "https://niko-kadi-upj5.onrender.com";
+export const host = "https://niko-kadi.onrender.com";
 
 export const registerRoute = `${host}/api/users/signup`;
 export const loginRoute = `${host}/api/users/signin`;
