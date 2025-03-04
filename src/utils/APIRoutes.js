@@ -1,4 +1,5 @@
-export const host = "https://niko-kadi.onrender.com";
+// export const host = "https://niko-kadi.onrender.com";
+export const host = 'https://symmetrical-succotash-qg5v7gvwx7h9j7j-3000.app.github.dev';
 
 export const registerRoute = `${host}/api/users/signup`;
 export const loginRoute = `${host}/api/users/signin`;
