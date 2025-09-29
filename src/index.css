@@ -1,9 +1,3 @@
 @tailwind base;
-@layer base {
-  html {
-    @apply text-gray-800;
-  } 
-}
-
 @tailwind components;
 @tailwind utilities;
