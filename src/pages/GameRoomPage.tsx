@@ -125,7 +125,7 @@ export const GameRoomPage: React.FC = () => {
 
   const handleShareRoom = async () => {
     if (!room) return;
-    const roomUrl = `${window.location.origin}/rooms/${room.roomId}`;
+    const roomUrl = `${window.location.origin}/room/${room.roomId}`;
     const shareMessage = `Come play nikokadi with me!\n${roomUrl}\nUse room code ${room.roomCode}`;
 
     try {
