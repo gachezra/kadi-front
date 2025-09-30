@@ -1,13 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import io, { Socket } from 'socket.io-client';
 import { DefaultEventsMap } from '@socket.io/component-emitter';
-import { ChatMessage } from '../types';
+import { ChatMessage, User } from '../types';
 
 // --- Type Definitions ---
-interface UserData {
-  userId: string;
-  username: string;
-}
 
 interface JoinRoomPayload {
   roomId: string;
@@ -15,12 +11,11 @@ interface JoinRoomPayload {
   username: string;
 }
 
-interface SendMessagePayload extends JoinRoomPayload {
+interface SendMessagePayload {
+    roomId: string;
+    userId: string;
+    username: string;
     message: string;
-}
-
-interface RequestPeersPayload {
-  roomId: string;
 }
 
 interface SetAudioStreamPayload {
@@ -35,7 +30,7 @@ interface ChatState {
   username: string | null;
   messages: ChatMessage[];
   audioStreams: { [key: string]: MediaStream };
-  peers: string[];
+  peers: User[];
   peerConnections: { [key: string]: boolean };
 }
 
@@ -56,59 +51,47 @@ let socket: Socket<DefaultEventsMap, DefaultEventsMap>;
 // --- Async Thunks ---
 export const connectSocket = createAsyncThunk(
   'chat/connectSocket',
-  async (_, { dispatch }) => {
+  async (payload: { username: string, roomId: string }, { dispatch }) => {
     socket = io('https://niko-kadi.onrender.com');
-    // console.log('Socket connected');
+    console.log('Socket connecting...');
+
+    socket.on('connect', () => {
+      console.log('Socket connected, joining room...');
+      socket.emit('join', { username: payload.username, room: payload.roomId });
+    });
 
     socket.on('message', (message: ChatMessage) => {
       dispatch(addMessage(message));
     });
 
-    socket.on('userJoined', (data: UserData) => {
+    socket.on('user-joined', (data: { username: string, userId: string }) => {
       dispatch(addMessage({ userId: 'System', username: 'System', message: `${data.username} joined the room` }));
     });
 
-    socket.on('userLeft', (data: UserData) => {
+    socket.on('user-left', (data: { username: string, userId: string }) => {
       dispatch(addMessage({ userId: 'System', username: 'System', message: `${data.username} left the room` }));
+    });
+
+    socket.on('room-users', (users: User[]) => {
+        dispatch(setPeers(users));
     });
 
     return true;
   }
 );
 
-export const joinRoom = createAsyncThunk(
-  'chat/joinRoom',
-  async (payload: JoinRoomPayload) => {
-    socket.emit('joinRoom', payload);
-    return payload;
-  }
-);
-
-export const leaveRoom = createAsyncThunk(
-  'chat/leaveRoom',
-  async (payload: JoinRoomPayload) => {
-    socket.emit('leaveRoom', payload);
-    return payload;
-  }
-);
-
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async (payload: SendMessagePayload) => {
-    socket.emit('sendMessage', payload);
-    return { userId: payload.userId, username: payload.username, message: payload.message };
+    socket.emit('message', { 
+        room: payload.roomId, 
+        content: payload.message 
+    });
+    // Return the message for optimistic update
+    return { userId: payload.userId, username: payload.username, message: payload.message, content: payload.message, timestamp: Date.now() };
   }
 );
 
-export const requestPeers = createAsyncThunk<string[], RequestPeersPayload>(
-  'chat/requestPeers',
-  async (payload) => {
-    socket.emit('requestPeers', payload);
-    return new Promise((resolve) => {
-      socket.once('peerList', (peerList: string[]) => resolve(peerList));
-    });
-  }
-);
 
 // --- Slice Definition ---
 const chatSlice = createSlice({
@@ -131,34 +114,27 @@ const chatSlice = createSlice({
     removePeerConnection: (state, action: PayloadAction<string>) => {
       delete state.peerConnections[action.payload];
     },
-    setPeers: (state, action: PayloadAction<string[]>) => {
-      state.peers = action.payload;
+    setPeers: (state, action: PayloadAction<User[]>) => {
+        state.peers = action.payload;
     },
+    disconnectSocket: (state) => {
+        if(socket) {
+            socket.disconnect();
+        }
+        return initialState;
+    }
   },
   extraReducers: (builder) => {
     builder
-      .addCase(connectSocket.fulfilled, (state) => {
+      .addCase(connectSocket.fulfilled, (state, action) => {
         state.connected = true;
-      })
-      .addCase(joinRoom.fulfilled, (state, action: PayloadAction<JoinRoomPayload>) => {
-        state.roomId = action.payload.roomId;
-        state.userId = action.payload.userId;
-        state.username = action.payload.username;
-      })
-      .addCase(leaveRoom.fulfilled, (state) => {
-        state.roomId = null;
-        state.userId = null;
-        state.username = null;
-        state.messages = [];
-        state.audioStreams = {};
-        state.peers = [];
-        state.peerConnections = {};
+        // @ts-ignore
+        state.roomId = action.meta.arg.roomId;
+        // @ts-ignore
+        state.username = action.meta.arg.username;
       })
       .addCase(sendMessage.fulfilled, (state, action: PayloadAction<ChatMessage>) => {
         state.messages.push(action.payload);
-      })
-      .addCase(requestPeers.fulfilled, (state, action: PayloadAction<string[]>) => {
-        state.peers = action.payload;
       });
   },
 });
@@ -169,7 +145,8 @@ export const {
   removeAudioStream,
   addPeerConnection,
   removePeerConnection,
-  setPeers
+  setPeers,
+  disconnectSocket
 } = chatSlice.actions;
 
 export { socket };

@@ -2,18 +2,16 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   connectSocket,
-  joinRoom,
-  leaveRoom,
   sendMessage,
-  requestPeers,
   addPeerConnection,
   removePeerConnection,
   setAudioStream,
   removeAudioStream,
   socket,
+  disconnectSocket,
 } from '../store/chatSlice';
 import { RootState, AppDispatch } from '../store';
-import { ChatMessage } from '../types';
+import { ChatMessage, User } from '../types';
 
 // --- Type Definitions ---
 interface ChatComponentProps {
@@ -53,6 +51,17 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ roomId, userId, username 
     }
   }, [messages]);
 
+  // Establish socket connection and join room
+  useEffect(() => {
+    if (!connected) {
+      dispatch(connectSocket({ username, roomId }));
+    }
+
+    return () => {
+      dispatch(disconnectSocket());
+    };
+  }, [connected, dispatch, username, roomId]);
+
   const createPeerConnection = useCallback((peerId: string) => {
     try {
       const pc = new RTCPeerConnection({
@@ -61,7 +70,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ roomId, userId, username 
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          socket.emit('iceCandidate', { target: peerId, candidate: event.candidate });
+          socket.emit('ice-candidate', { target: peerId, candidate: event.candidate });
         }
       };
 
@@ -82,66 +91,43 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ roomId, userId, username 
   }, [dispatch, localStream]);
 
   const handleOffer = useCallback(
-    async ({ source, sdp }: OfferPayload) => {
-      const pc = createPeerConnection(source);
+    async ({ from, offer }: { from: string, offer: RTCSessionDescriptionInit }) => {
+      const pc = createPeerConnection(from);
       if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        socket.emit('answer', { target: source, sdp: answer });
+        socket.emit('answer', { target: from, answer });
       }
     },
     [createPeerConnection]
   );
 
-  const handleAnswer = useCallback(async ({ source, sdp }: AnswerPayload) => {
-    const pc = peerConnectionsRef.current[source];
+  const handleAnswer = useCallback(async ({ from, answer }: { from: string, answer: RTCSessionDescriptionInit }) => {
+    const pc = peerConnectionsRef.current[from];
     if (pc) {
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
     }
   }, []);
 
-  const handleIceCandidate = useCallback(({ source, candidate }: IceCandidatePayload) => {
-    const pc = peerConnectionsRef.current[source];
+  const handleIceCandidate = useCallback(({ from, candidate }: { from: string, candidate: RTCIceCandidateInit }) => {
+    const pc = peerConnectionsRef.current[from];
     if (pc) {
       pc.addIceCandidate(new RTCIceCandidate(candidate));
     }
   }, []);
 
-  useEffect(() => {
-    if (!connected) {
-      dispatch(connectSocket());
-    }
-  }, [connected, dispatch]);
-
-  useEffect(() => {
-    if (connected && roomId && userId) {
-      dispatch(joinRoom({ roomId, userId, username }));
-    }
-
-    return () => {
-      if (roomId && userId) {
-        dispatch(leaveRoom({ roomId, userId, username }));
-      }
-    };
-  }, [connected, roomId, userId, dispatch, username]);
-
-  useEffect(() => {
-    if (connected && roomId) {
-      dispatch(requestPeers({ roomId }));
-    }
-  }, [connected, roomId, dispatch]);
-
+  // WebRTC signaling handlers
   useEffect(() => {
     if (connected) {
       socket.on('offer', handleOffer);
       socket.on('answer', handleAnswer);
-      socket.on('iceCandidate', handleIceCandidate);
+      socket.on('ice-candidate', handleIceCandidate);
 
       return () => {
         socket.off('offer', handleOffer);
         socket.off('answer', handleAnswer);
-        socket.off('iceCandidate', handleIceCandidate);
+        socket.off('ice-candidate', handleIceCandidate);
       };
     }
   }, [connected, handleOffer, handleAnswer, handleIceCandidate]);
@@ -152,12 +138,13 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ roomId, userId, username 
       setLocalStream(stream);
       setIsAudioStreaming(true);
 
-      peers.forEach(async (peerId) => {
-        const pc = createPeerConnection(peerId);
+      peers.forEach(async (peer: User) => {
+          if(peer.userId === userId) return;
+        const pc = createPeerConnection(peer.userId);
         if (pc) {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.emit('offer', { target: peerId, sdp: offer });
+          socket.emit('offer', { target: peer.userId, offer });
         }
       });
     } catch (error) {
@@ -205,7 +192,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({ roomId, userId, username 
             }`}
           >
             <strong className="block text-sm text-gray-200">{msg.username}:</strong>
-            <span className="block text-gray-100 break-words">{msg.message}</span>
+            <span className="block text-gray-100 break-words">{msg.content}</span>
           </div>
         ))}
          {/* Audio streams */}

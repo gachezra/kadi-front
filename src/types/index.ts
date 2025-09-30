@@ -57,5 +57,12 @@ export interface GameStats {
 export interface ChatMessage {
   userId: string;
   username: string;
-  message: string;
+  content: string; 
+  timestamp: number;
+}
+
+export interface User {
+  id: string;
+  userId: string;
+  username: string;
 }
