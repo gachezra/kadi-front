@@ -53,3 +53,9 @@ export interface GameStats {
   gamesPlayed: number;
   gamesWon: number;
 }
+
+export interface ChatMessage {
+  userId: string;
+  username: string;
+  message: string;
+}

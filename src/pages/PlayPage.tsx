@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Hash, Users, Clock } from 'lucide-react';
+import { Plus, Hash, Users, Clock, CopyPlus } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -36,7 +36,7 @@ export const PlayPage: React.FC = () => {
       // Step 1: Create the room and get its details
       const newRoom = await createRoom(numPlayers, numToDeal, user.id, user.username);
 
-      console.log(newRoom)
+      // console.log(newRoom)
       
       // Step 2: Ensure the game state is initialized on the server
       await getRoomDetails(newRoom.roomId);
@@ -44,6 +44,7 @@ export const PlayPage: React.FC = () => {
       toast.success('Room created successfully!');
       navigate(`/room/${newRoom.roomId}`);
     } catch (error: any) {
+      console.log(error.response)
       toast.error(error.response?.data?.message || 'Failed to create room');
     } finally {
       setIsLoading(false);
@@ -73,7 +74,7 @@ export const PlayPage: React.FC = () => {
       // The `joinRoom` utility will POST to `/join/:roomId` with the code in the body.
       const joinedRoom = await joinRoom(targetRoomId, user.id, user.username, roomCode.trim() || undefined);
       toast.success('Joined room successfully!');
-      navigate(`/room/${joinedRoom.id}`);
+      navigate(`/room/${joinedRoom.roomId}`);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to join room. Check the Code/ID.');
     } finally {
@@ -140,7 +141,12 @@ export const PlayPage: React.FC = () => {
           <div className="text-center">
             <Hash className="mx-auto mb-3 text-yellow-400" size={24} />
             <h4 className="font-semibold text-white mb-2">Special Cards</h4>
-            <p className="text-gray-400 text-sm">Aces, 8s, and Queens</p>
+            <p className="text-gray-400 text-sm">Aces, 8s, Jacks, Queens and Kings</p>
+          </div>
+          <div className="text-center">
+            <CopyPlus className="mx-auto mb-3 text-yellow-400" size={24} />
+            <h4 className="font-semibold text-white mb-2">Feeding Cards</h4>
+            <p className="text-gray-400 text-sm">2s and 3s</p>
           </div>
         </div>
       </GlassCard>
