@@ -43,17 +43,15 @@ export const connectSocket = createAsyncThunk(
     payload: { roomId: string; userId?: string; username?: string },
     { dispatch }
   ) => {
+    // Clear any existing listeners to prevent duplicate subscriptions
+    offHandlers.forEach((off) => {
+      try { off(); } catch (e) {}
+    });
+    offHandlers = [];
+
     await connectSocketService();
 
-    // join the room on the server (server may respond or broadcast room state)
-    try {
-      await apiJoinRoom(payload.roomId, payload.userId, payload.username);
-    } catch (e) {
-      // joinRoom may throw if server rejects; still continue to register listeners
-      console.warn('joinRoom failed', e);
-    }
-
-    // register listeners and keep their unsubscribe handles
+    // IMPORTANT: Register all listeners BEFORE joining to avoid race conditions (per blueprint)
     offHandlers.push(
       onChatMessage((msg: ChatMessage) => {
         dispatch(addMessage(msg));
@@ -86,6 +84,14 @@ export const connectSocket = createAsyncThunk(
       })
     );
 
+    // NOW join the room on the server (server may respond or broadcast room state)
+    try {
+      await apiJoinRoom(payload.roomId, payload.userId, payload.username);
+    } catch (e) {
+      // joinRoom may throw if server rejects; but listeners are ready
+      console.warn('joinRoom failed', e);
+    }
+
     return { roomId: payload.roomId };
   }
 );
@@ -93,15 +99,15 @@ export const connectSocket = createAsyncThunk(
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
   async (
-    payload: { roomId: string; message: string; id?: string; username?: string },
+    payload: { roomId: string; message: string; userId: string; id?: string; username?: string },
     {}) => {
-    // Use the socket wrapper to emit message. We don't need a response here.
-    await apiSendMessage(payload.message, payload.roomId);
-    // Return a locally-constructed message for optimistic add if desired by UI
+    // Use the socket wrapper to emit message with userId and username
+    await apiSendMessage(payload.message, payload.roomId, payload.userId, payload.username);
     return {
       id: payload.id ?? `local-${Date.now()}`,
       content: payload.message,
       username: payload.username,
+      userId: payload.userId,
       createdAt: new Date().toISOString(),
     } as ChatMessage;
   }
@@ -135,10 +141,8 @@ export const chatSlice = createSlice({
       state.roomId = action.payload.roomId;
     });
 
-    builder.addCase(sendMessage.fulfilled, (state, action) => {
-      // add the optimistic/local message to state
-      state.messages.push(action.payload as ChatMessage);
-    });
+    // Don't add message optimistically - let the server broadcast handle it
+    // to avoid duplicates
   },
 });
 

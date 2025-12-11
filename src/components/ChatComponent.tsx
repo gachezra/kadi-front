@@ -39,9 +39,13 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   }, [messages]);
 
   useEffect(() => {
-    if (!connected) {
-      dispatch(connectSocket({ username, roomId }));
+    if (connected) {
+      // Socket already connected, listeners should be active
+      return;
     }
+    
+    // Only connect if not already connected
+    dispatch(connectSocket({ username, roomId }));
 
     // Wire audio event listener (binary audio blobs sent via socket)
     const handleIncomingAudio = (payload: any) => {

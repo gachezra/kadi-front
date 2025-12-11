@@ -1,4 +1,4 @@
-export const API_BASE_URL = "https://sebastian-judicative-valorie.ngrok-free.dev/";
+export const API_BASE_URL = "https://sebastian-judicative-valorie.ngrok-free.dev";
 
 export const COLORS = {
   bg: {

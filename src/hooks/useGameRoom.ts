@@ -116,7 +116,12 @@ export const useGameRoom = (roomId: string | undefined, user?: { id: string; use
         unsub = socketService.onGameStateUpdated((data: any) => {
           try {
             const processed = processRoomData(data);
-            setBackendRoom(processed);
+            // Only update when processed data contains a valid clientRoom
+            if (processed.clientRoom && processed.clientRoom.roomId && processed.clientRoom.owner) {
+              setBackendRoom(processed);
+            } else {
+              console.warn('[useGameRoom] Ignoring invalid game state update from socket:', data);
+            }
           } catch (err) {
             console.error('Error processing game state update:', err);
           }

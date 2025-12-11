@@ -3,12 +3,29 @@ import { Card } from '../types';
 import { cn } from '../utils/cn';
 
 interface PlayingCardProps {
-  card: Card;
+  card: Card | string;
   isSelected?: boolean;
   onClick?: () => void;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
+
+const parseCardString = (cardStr: string | Card): { suit: string; value: string } | null => {
+  if (typeof cardStr === 'string') {
+    // Parse format: "5♦" (value + suit symbol)
+    if (cardStr.length < 2) return null;
+    const suit = cardStr.slice(-1);
+    const value = cardStr.slice(0, -1);
+    const validSuits = ['♠', '♥', '♦', '♣'];
+    if (!validSuits.includes(suit) || !value) return null;
+    return { suit, value };
+  }
+  // Already a Card object
+  if (cardStr && typeof cardStr.suit === 'string' && typeof cardStr.value === 'string') {
+    return cardStr;
+  }
+  return null;
+};
 
 const suitIcons: Record<string, React.ReactNode> = {
   '♠': (
@@ -40,11 +57,12 @@ export const PlayingCard: React.FC<PlayingCardProps> = ({
   size = 'md',
   className,
 }) => {
-  if (!card || typeof card.suit !== 'string' || typeof card.value !== 'string') {
+  const parsed = parseCardString(card);
+  if (!parsed) {
     return <div className="w-16 h-24 bg-gray-200 rounded-lg flex items-center justify-center">Invalid Card</div>;
   }
   
-  const { suit, value } = card;
+  const { suit, value } = parsed;
   const isSpecialCard = ['A', '8', 'Q'].includes(value);
   const color = suit === '♥' || suit === '♦' ? 'text-red-500' : 'text-black';
 

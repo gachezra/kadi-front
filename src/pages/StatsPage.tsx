@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Play, Trophy, TrendingUp, Clock, Target } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
+import SocketStatus from '../components/SocketStatus';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getGameStats } from '../utils/api';
 import { GameStats } from '../types';
@@ -38,6 +39,9 @@ export const StatsPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex justify-end">
+        <SocketStatus placement="inline" />
+      </div>
       {/* Header */}
       <div className="text-center">
         <h1 className="text-4xl font-bold text-white mb-4">Game Statistics</h1>

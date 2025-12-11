@@ -1,17 +1,23 @@
 import io, { Socket } from 'socket.io-client';
 import { API_BASE_URL } from './constants';
-// Import your types if needed
-// import { Room, GameMove, Card, GameStats } from '../types';
 
-export interface MakeMoveResponse {
-  awaitingSpecialAction?: boolean;
-  specialCard?: string | null;
-  message?: string;
+/**
+ * Standard Socket.io callback response format per SOCKET_API_SPEC
+ */
+export interface SocketResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  roomUsers?: any[];
 }
+
+export interface MakeMoveResponse extends SocketResponse<any> {}
 
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, Set<Function>> = new Map();
+  private joinRoomAttempts: Map<string, number> = new Map(); // Track join attempts per user
+  private joinInProgress: Set<string> = new Set(); // Track in-progress joins
 
   /**
    * Initialize and connect to the WebSocket server
@@ -33,17 +39,21 @@ class SocketService {
         });
 
         this.socket.on('connect', () => {
-          console.log('✅ Connected to server');
+          console.log('[SocketService] Connected:', this.socket?.id);
           resolve();
         });
 
+        this.socket.on('error', (err: any) => {
+          console.error('[SocketService] error:', err);
+        });
+
         this.socket.on('disconnect', () => {
-          console.log('❌ Disconnected from server');
+          console.log('[SocketService] Disconnected');
           this.emitLocalEvent('socket:disconnected');
         });
 
         this.socket.on('connect_error', (error) => {
-          console.error('⚠️ Connection error:', error);
+          console.error('[SocketService] connect_error:', error);
           reject(error);
         });
       } catch (error) {
@@ -52,9 +62,6 @@ class SocketService {
     });
   }
 
-  /**
-   * Disconnect from the server
-   */
   disconnect(): void {
     if (this.socket) {
       this.socket.disconnect();
@@ -62,9 +69,6 @@ class SocketService {
     }
   }
 
-  /**
-   * Check if connected
-   */
   isConnected(): boolean {
     return this.socket?.connected ?? false;
   }
@@ -72,35 +76,20 @@ class SocketService {
   // ===== ROOM MANAGEMENT =====
 
   /**
-   * Create a new room
+   * room:create - Create a new game room
    */
   createRoom(
     numPlayers: number,
     numToDeal: number,
-    userId: string,
-    username: string
+    owner: string,
+    ownerName: string
   ): Promise<any> {
-    const payload = {
-      numPlayers,
-      numToDeal,
-      owner: userId,
-      ownerName: username,
-    };
-
-    console.log('[SocketService] createRoom -> emitting', payload);
-    return this.emitWithResponse('room:create', payload)
-      .then((res) => {
-        console.log('[SocketService] createRoom <- response', res);
-        return res;
-      })
-      .catch((err) => {
-        console.error('[SocketService] createRoom <- error', err);
-        throw err;
-      });
+    const payload = { numPlayers, numToDeal, owner, ownerName };
+    return this.emitWithResponse('room:create', payload);
   }
 
   /**
-   * Join an existing room
+   * room:join - Join an existing room
    */
   joinRoom(
     roomId: string,
@@ -108,155 +97,161 @@ class SocketService {
     username: string,
     roomCode?: string
   ): Promise<any> {
-    return this.emitWithResponse('room:join', {
-      roomId,
-      userId,
-      username,
-      roomCode,
+    // Input validation
+    if (!roomId || !userId || !username) {
+      return Promise.reject(new Error('Missing required parameters: roomId, userId, username'));
+    }
+
+    if (roomId.trim().length === 0 || userId.trim().length === 0 || username.trim().length === 0) {
+      return Promise.reject(new Error('Parameters cannot be empty strings'));
+    }
+
+    const joinKey = `${roomId}:${userId}`;
+
+    // Prevent concurrent join requests for the same user-room combo
+    if (this.joinInProgress.has(joinKey)) {
+      return Promise.reject(new Error('Join request already in progress'));
+    }
+
+    // Rate limiting: check if user has attempted to join too many times recently
+    const now = Date.now();
+    const lastAttempt = this.joinRoomAttempts.get(userId) || 0;
+    if (now - lastAttempt < 2000) {
+      // Prevent rapid fire join attempts (minimum 2 seconds between attempts)
+      return Promise.reject(new Error('Please wait before trying to join another room'));
+    }
+
+    this.joinInProgress.add(joinKey);
+    this.joinRoomAttempts.set(userId, now);
+
+    const payload = { roomId, userId, username, roomCode };
+    return this.emitWithResponse('room:join', payload).finally(() => {
+      // Clean up in-progress tracking
+      this.joinInProgress.delete(joinKey);
     });
   }
 
   /**
-   * Get room details
+   * room:get-details - Get full room details
    */
   getRoomDetails(roomId: string): Promise<any> {
-    return this.emitWithResponse('room:get-details', { roomId });
+    const payload = { roomId };
+    return this.emitWithResponse('room:get-details', payload);
   }
 
   /**
-   * Get all rooms for a user
-   */
-  getUserRooms(userId: string): Promise<any[]> {
-    return this.emitWithResponse('room:list-by-user', { userId });
-  }
-
-  /**
-   * List all available rooms
+   * room:list-available - List all available rooms
    */
   listAvailableRooms(): Promise<any[]> {
     return this.emitWithResponse('room:list-available', {});
   }
 
   /**
-   * Terminate a room
+   * stats:get-game-stats - Get global game statistics
    */
-  terminateRoom(roomId: string, userId: string): Promise<void> {
-    return this.emitWithResponse('game:terminate', { roomId, userId });
+  getGameStats(): Promise<any> {
+    return this.emitWithResponse('stats:get-game-stats', {});
+  }
+
+  /**
+   * room:list-by-user - Get rooms for a user
+   */
+  getUserRooms(userId: string): Promise<any[]> {
+    const payload = { userId };
+    return this.emitWithResponse('room:list-by-user', payload);
+  }
+
+  /**
+   * room:start-game - Start the game
+   */
+  startGame(roomId: string): Promise<any> {
+    const payload = { roomId };
+    return this.emitWithResponse('room:start-game', payload);
   }
 
   // ===== GAME ACTIONS =====
 
   /**
-   * Start the game
-   * Accepts optional userId for backward compatibility with call sites
-   */
-  startGame(roomId: string, userId?: string): Promise<void> {
-    return this.emitWithResponse('room:start-game', { roomId, userId });
-  }
-
-  /**
-   * Get current game data
-   */
-  getGameData(roomId: string): Promise<any> {
-    return this.emitWithResponse('game:get-data', { roomId });
-  }
-
-  /**
-   * Make a move in the game
+   * game:move - Play a card or perform a turn action
    */
   makeMove(
     roomId: string,
     userId: string,
     action: string,
-    cards: any[]
+    cards: any[] = []
   ): Promise<MakeMoveResponse> {
-    return this.emitWithResponse('game:move', {
-      roomId,
-      userId,
-      action,
-      cards,
-    });
+    const payload = { roomId, userId, action, cards };
+    return this.emitWithResponse('game:move', payload);
   }
 
   /**
-   * Declare Niko Kadi (player is card)
+   * game:get-data - Fetch current game state
    */
-  declareNikoKadi(roomId: string, userId: string): Promise<void> {
-    return this.emitWithResponse('game:nikokadi', { roomId, userId });
+  getGameData(roomId: string): Promise<any> {
+    const payload = { roomId };
+    return this.emitWithResponse('game:get-data', payload);
   }
 
   /**
-   * Call Niko Kadi on another player
+   * game:nikokadi - Declare or call Niko Kadi
    */
-  callNikoKadi(
-    roomId: string,
-    userId: string,
-    targetPlayerId: string
-  ): Promise<void> {
-    return this.emitWithResponse('game:nikokadi', {
-      roomId,
-      userId,
-      targetPlayerId,
-    });
+  nikoKadi(roomId: string, userId: string, targetPlayerId?: string): Promise<any> {
+    const payload: any = { roomId, userId };
+    if (targetPlayerId) payload.targetPlayerId = targetPlayerId;
+    return this.emitWithResponse('game:nikokadi', payload);
   }
 
   /**
-   * Change the suit
+   * game:change-suit - Change the suit
    */
-  changeSuit(roomId: string, userId: string, newSuit: string): Promise<void> {
-    return this.emitWithResponse('game:change-suit', {
-      roomId,
-      userId,
-      newSuit,
-    });
+  changeSuit(roomId: string, userId: string, newSuit: string): Promise<any> {
+    const payload = { roomId, userId, newSuit };
+    return this.emitWithResponse('game:change-suit', payload);
   }
 
   /**
-   * Answer a question card
+   * game:answer-question - Answer a question card
    */
-  answerQuestion(
-    roomId: string,
-    userId: string,
-    answer: string
-  ): Promise<void> {
-    return this.emitWithResponse('game:answer-question', {
-      roomId,
-      userId,
-      cards: [],
-      action: answer,
-    });
+  answerQuestion(roomId: string, userId: string, answer: string): Promise<any> {
+    const payload = { roomId, userId, cards: [], action: answer };
+    return this.emitWithResponse('game:answer-question', payload);
   }
 
   /**
-   * Drop an ace
+   * game:drop-ace - Drop an ace
    */
-  dropAce(roomId: string, userId: string, cards: any[]): Promise<void> {
-    return this.emitWithResponse('game:drop-ace', {
-      roomId,
-      userId,
-      drop: cards,
-    });
+  dropAce(roomId: string, userId: string, drop: any): Promise<any> {
+    const payload = { roomId, userId, drop };
+    return this.emitWithResponse('game:drop-ace', payload);
   }
 
-  // ===== COMMUNICATION =====
+  /**
+   * game:terminate - Terminate the game
+   */
+  terminateRoom(roomId: string, userId: string): Promise<any> {
+    const payload = { roomId, userId };
+    return this.emitWithResponse('game:terminate', payload);
+  }
+
+  // ===== CHAT & AUDIO =====
 
   /**
-   * Send a chat message to a room
+   * chat:message - Send a chat message (fire-and-forget)
    */
-  sendMessage(content: string, roomId: string): void {
+  sendMessage(content: string, roomId: string, userId?: string, username?: string): void {
     if (!this.socket?.connected) {
-      console.warn('Socket not connected');
+      console.warn('[SocketService] Socket not connected for chat');
       return;
     }
-    this.socket.emit('chat:message', { content, roomId });
+    this.socket.emit('chat:message', { content, roomId, userId, username });
   }
 
   /**
-   * Send raw audio payload to room
+   * audio - Send audio stream (fire-and-forget)
    */
   sendAudio(roomId: string, username: string, userId: string, audio: any): void {
     if (!this.socket?.connected) {
-      console.warn('Socket not connected (audio)');
+      console.warn('[SocketService] Socket not connected for audio');
       return;
     }
     this.socket.emit('audio', { roomId, username, userId, audio });
@@ -265,209 +260,155 @@ class SocketService {
   // ===== WEBRTC SIGNALING =====
 
   /**
-   * Send WebRTC offer
-   */
-  sendOffer(targetSocketId: string, offer: any, mediaType?: string): void {
-    if (!this.socket?.connected) {
-      console.warn('Socket not connected');
-      return;
-    }
-    this.socket.emit('webrtc:offer', { targetSocketId, offer, mediaType });
-  }
-
-  /**
-   * Send WebRTC answer
-   */
-  sendAnswer(targetSocketId: string, answer: any): void {
-    if (!this.socket?.connected) {
-      console.warn('Socket not connected');
-      return;
-    }
-    this.socket.emit('webrtc:answer', { targetSocketId, answer });
-  }
-
-  /**
-   * Send ICE candidate
-   */
-  sendIceCandidate(targetSocketId: string, candidate: any): void {
-    if (!this.socket?.connected) {
-      console.warn('Socket not connected');
-      return;
-    }
-    this.socket.emit('webrtc:ice-candidate', { targetSocketId, candidate });
-  }
-
-  /**
-   * Request list of peers for this room
+   * webrtc:get-peers - Get list of peers in a room
    */
   getPeers(roomId: string): Promise<any> {
-    return this.emitWithResponse('webrtc:get-peers', { roomId });
+    const payload = { roomId };
+    return this.emitWithResponse('webrtc:get-peers', payload);
+  }
+
+  /**
+   * webrtc:offer - Send WebRTC offer
+   */
+  sendOffer(targetSocketId: string, offer: any, mediaType?: string): Promise<any> {
+    const payload = { targetSocketId, offer, mediaType };
+    return this.emitWithResponse('webrtc:offer', payload);
+  }
+
+  /**
+   * webrtc:answer - Send WebRTC answer
+   */
+  sendAnswer(targetSocketId: string, answer: any): Promise<any> {
+    const payload = { targetSocketId, answer };
+    return this.emitWithResponse('webrtc:answer', payload);
+  }
+
+  /**
+   * webrtc:ice-candidate - Send ICE candidate
+   */
+  sendIceCandidate(targetSocketId: string, candidate: any): Promise<any> {
+    const payload = { targetSocketId, candidate };
+    return this.emitWithResponse('webrtc:ice-candidate', payload);
+  }
+
+  /**
+   * webrtc:connection-state - Report connection state
+   */
+  sendConnectionState(targetSocketId: string, state: string): Promise<any> {
+    const payload = { targetSocketId, state };
+    return this.emitWithResponse('webrtc:connection-state', payload);
+  }
+
+  /**
+   * webrtc:disconnect-peer - Gracefully disconnect from peer (fire-and-forget)
+   */
+  disconnectPeer(targetSocketId: string): void {
+    if (!this.socket?.connected) {
+      console.warn('[SocketService] Socket not connected for peer disconnect');
+      return;
+    }
+    this.socket.emit('webrtc:disconnect-peer', { targetSocketId });
   }
 
   // ===== EVENT LISTENERS =====
 
-  /**
-   * Listen for game state updates (broadcast to all room players)
-   */
   onGameStateUpdated(callback: (data: any) => void): () => void {
     return this.addEventListener('game:state-updated', callback);
   }
 
-  /**
-   * Listen for game start
-   */
   onGameStarted(callback: (data: any) => void): () => void {
     return this.addEventListener('game:started', callback);
   }
 
-  /**
-   * Listen for game termination
-   */
   onGameTerminated(callback: (data: any) => void): () => void {
     return this.addEventListener('game:terminated', callback);
   }
 
-  /**
-   * Listen for user joining room
-   */
   onUserJoined(callback: (data: any) => void): () => void {
     return this.addEventListener('user-joined', callback);
   }
 
-  /**
-   * Listen for user leaving room
-   */
   onUserLeft(callback: (data: any) => void): () => void {
     return this.addEventListener('user-left', callback);
   }
 
-  /**
-   * Listen for chat messages
-   */
-  onChatMessage(callback: (data: any) => void): () => void {
-    return this.addEventListener('chat:message', callback);
-  }
-
-  /**
-   * Listen for full room users list
-   */
   onRoomUsers(callback: (data: any) => void): () => void {
     return this.addEventListener('room-users', callback);
   }
 
-  /**
-   * Listen for raw audio messages
-   */
+  onChatMessage(callback: (data: any) => void): () => void {
+    return this.addEventListener('chat:message', callback);
+  }
+
   onAudio(callback: (data: any) => void): () => void {
     return this.addEventListener('audio', callback);
   }
 
-  /**
-   * Listen for WebRTC offer
-   */
-  onWebRTCOffer(callback: (data: any) => void): () => void {
-    // server broadcasts `webrtc:offer-received` to the target peer
+  onWebRTCOfferReceived(callback: (data: any) => void): () => void {
     return this.addEventListener('webrtc:offer-received', callback);
   }
 
-  /**
-   * Listen for WebRTC answer
-   */
-  onWebRTCAnswer(callback: (data: any) => void): () => void {
-    // server broadcasts `webrtc:answer-received` to the target peer
+  onWebRTCAnswerReceived(callback: (data: any) => void): () => void {
     return this.addEventListener('webrtc:answer-received', callback);
   }
 
-  /**
-   * Listen for ICE candidate
-   */
-  onWebRTCIceCandidate(callback: (data: any) => void): () => void {
-    // server broadcasts `webrtc:ice-candidate-received` to the target peer
+  onWebRTCIceCandidateReceived(callback: (data: any) => void): () => void {
     return this.addEventListener('webrtc:ice-candidate-received', callback);
   }
 
-  /**
-   * Listen for connection state updates
-   */
   onWebRTCConnectionState(callback: (data: any) => void): () => void {
     return this.addEventListener('webrtc:connection-state-update', callback);
   }
 
-  /**
-   * Listen for peer disconnect notifications
-   */
   onWebRTCPeerDisconnected(callback: (data: any) => void): () => void {
     return this.addEventListener('webrtc:peer-disconnected', callback);
   }
 
-  /**
-   * Return the raw socket instance (nullable) for libraries that require direct access.
-   * Use sparingly — prefer the typed helpers on this service.
-   */
-  getRawSocket(): Socket | null {
-    return this.socket;
-  }
-
-  /**
-   * Listen for socket connection
-   */
   onConnected(callback: () => void): () => void {
     return this.addEventListener('socket:connected', callback);
   }
 
-  /**
-   * Listen for socket disconnection
-   */
   onDisconnected(callback: () => void): () => void {
     return this.addEventListener('socket:disconnected', callback);
   }
 
-  // ===== PRIVATE HELPER METHODS =====
+  getRawSocket(): Socket | null {
+    return this.socket;
+  }
 
-  /**
-   * Emit event and wait for response (Promise-based)
-   */
+  // ===== PRIVATE HELPERS =====
+
   private emitWithResponse(event: string, payload: any): Promise<any> {
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.socket?.connected) {
-          console.warn(`[SocketService] socket not connected - attempting auto-connect before emitting '${event}'`);
+          console.log(`[SocketService] Socket not connected, attempting auto-connect for '${event}'`);
           try {
             await this.connect();
-            console.log('[SocketService] auto-connect successful');
           } catch (connErr) {
-            console.error('[SocketService] auto-connect failed', connErr);
+            console.error('[SocketService] Auto-connect failed:', connErr);
             reject(new Error('Socket not connected'));
             return;
           }
         }
 
-        console.log(`[SocketService] emitting ${event} ->`, payload);
-
         const timeout = setTimeout(() => {
-          reject(new Error(`${event} request timed out`));
+          reject(new Error(`${event} timed out after 10s`));
         }, 10000);
 
         this.socket!.emit(event, payload, (response: any) => {
           clearTimeout(timeout);
-          console.log(`[SocketService] ${event} <- response`, response);
-          // Some server handlers reply with { success: true } and no `data` property.
-          // When `success` exists, treat it as the canonical flag; otherwise assume
-          // the raw response is the payload.
+          console.log(`[SocketService] ${event} response:`, response);
+
           if (response && typeof response === 'object' && 'success' in response) {
             if (response.success) {
-              if (response.data === undefined) {
-                // Warn to aid debugging when server responds with success but no data
-                console.warn(`[SocketService] ${event} returned success without data`);
-                resolve(response);
-              } else {
-                resolve(response.data);
-              }
+              // Return data if present, otherwise return the whole response
+              resolve(response.data !== undefined ? response.data : response);
             } else {
               reject(new Error(response.error || 'Unknown error'));
             }
           } else {
-            // No explicit success flag — resolve with whatever the server sent.
+            // No explicit success flag — resolve with raw response
             resolve(response);
           }
         });
@@ -477,98 +418,94 @@ class SocketService {
     });
   }
 
-  /**
-   * Add event listener with cleanup function
-   */
-  private addEventListener(
-    event: string,
-    callback: Function
-  ): () => void {
+  private addEventListener(event: string, callback: Function): () => void {
     if (!this.socket) {
-      console.warn(`Socket not initialized for event: ${event}`);
+      console.warn(`[SocketService] Socket not initialized for event: ${event}`);
       return () => {};
     }
 
     this.socket.on(event, callback as any);
 
-    // Return unsubscribe function
     return () => {
       this.socket?.off(event, callback as any);
     };
   }
 
-  /**
-   * Emit local event (not sent to server)
-   */
   private emitLocalEvent(event: string): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      callbacks.forEach((callback) => callback());
+      callbacks.forEach((cb) => cb());
     }
   }
 }
 
-// Export singleton instance
+// Singleton instance
 export const socketService = new SocketService();
 
-// Convenience wrappers (so existing imports keep working) - these call into socketService
+// Convenience wrappers
 export const connectSocketService = (url?: string) => socketService.connect(url);
 export const disconnectSocketService = () => socketService.disconnect();
 export const isSocketConnected = () => socketService.isConnected();
 
-export const createRoom = (numPlayers: number, numToDeal: number, userId: string, username: string) => socketService.createRoom(numPlayers, numToDeal, userId, username);
-export const joinRoom = (roomId: string, userId: string, username: string, roomCode?: string) => socketService.joinRoom(roomId, userId, username, roomCode);
+// Room management
+export const createRoom = (numPlayers: number, numToDeal: number, owner: string, ownerName: string) =>
+  socketService.createRoom(numPlayers, numToDeal, owner, ownerName);
+export const joinRoom = (roomId: string, userId: string, username: string, roomCode?: string) =>
+  socketService.joinRoom(roomId, userId, username, roomCode);
 export const getRoomDetails = (roomId: string) => socketService.getRoomDetails(roomId);
 export const getUserRooms = (userId: string) => socketService.getUserRooms(userId);
 export const listAvailableRooms = () => socketService.listAvailableRooms();
-export const terminateRoom = (roomId: string, userId: string) => socketService.terminateRoom(roomId, userId);
+export const getGameStats = () => socketService.getGameStats();
+export const startGame = (roomId: string) => socketService.startGame(roomId);
 
-export const startGame = (roomId: string, userId?: string) => socketService.startGame(roomId, userId);
+// Game actions
+export const makeMove = (roomId: string, userId: string, action: string, cards?: any[]) =>
+  socketService.makeMove(roomId, userId, action, cards);
 export const getGameData = (roomId: string) => socketService.getGameData(roomId);
-export const makeMove = (roomId: string, userId: string, action: string, cards: any[]) => socketService.makeMove(roomId, userId, action, cards);
-export const declareNikoKadi = (roomId: string, userId: string) => socketService.declareNikoKadi(roomId, userId);
-export const callNikoKadi = (roomId: string, userId: string, targetPlayerId: string) => socketService.callNikoKadi(roomId, userId, targetPlayerId);
-export const changeSuit = (roomId: string, userId: string, newSuit: string) => socketService.changeSuit(roomId, userId, newSuit);
-export const answerQuestion = (roomId: string, userId: string, answer: string) => socketService.answerQuestion(roomId, userId, answer);
-export const dropAce = (roomId: string, userId: string, cards: any[]) => socketService.dropAce(roomId, userId, cards);
+export const nikoKadi = (roomId: string, userId: string, targetPlayerId?: string) =>
+  socketService.nikoKadi(roomId, userId, targetPlayerId);
+export const changeSuit = (roomId: string, userId: string, newSuit: string) =>
+  socketService.changeSuit(roomId, userId, newSuit);
+export const answerQuestion = (roomId: string, userId: string, answer: string) =>
+  socketService.answerQuestion(roomId, userId, answer);
+export const dropAce = (roomId: string, userId: string, drop: any) =>
+  socketService.dropAce(roomId, userId, drop);
+export const terminateRoom = (roomId: string, userId: string) =>
+  socketService.terminateRoom(roomId, userId);
 
-// Chat
-export const sendMessage = (content: string, roomId: string) => socketService.sendMessage(content, roomId);
+// Chat & audio
+export const sendMessage = (content: string, roomId: string, userId?: string, username?: string) =>
+  socketService.sendMessage(content, roomId, userId, username);
+export const sendAudio = (roomId: string, username: string, userId: string, audio: any) =>
+  socketService.sendAudio(roomId, username, userId, audio);
 
-// Audio helper
-export const sendAudio = (roomId: string, username: string, userId: string, audio: any) => socketService.sendAudio(roomId, username, userId, audio);
-
-// WebRTC helpers
-export const sendOffer = (targetSocketId: string, offer: any, mediaType?: string) => socketService.sendOffer(targetSocketId, offer, mediaType);
-export const sendAnswer = (targetSocketId: string, answer: any) => socketService.sendAnswer(targetSocketId, answer);
-export const sendIceCandidate = (targetSocketId: string, candidate: any) => socketService.sendIceCandidate(targetSocketId, candidate);
+// WebRTC
 export const getPeers = (roomId: string) => socketService.getPeers(roomId);
-export const getRawSocket = () => socketService.getRawSocket();
+export const sendOffer = (targetSocketId: string, offer: any, mediaType?: string) =>
+  socketService.sendOffer(targetSocketId, offer, mediaType);
+export const sendAnswer = (targetSocketId: string, answer: any) =>
+  socketService.sendAnswer(targetSocketId, answer);
+export const sendIceCandidate = (targetSocketId: string, candidate: any) =>
+  socketService.sendIceCandidate(targetSocketId, candidate);
+export const sendConnectionState = (targetSocketId: string, state: string) =>
+  socketService.sendConnectionState(targetSocketId, state);
+export const disconnectPeer = (targetSocketId: string) =>
+  socketService.disconnectPeer(targetSocketId);
 
-// Listener wrapper exports (forward to singleton socketService)
+// Listeners
 export const onGameStateUpdated = (cb: (data: any) => void) => socketService.onGameStateUpdated(cb);
 export const onGameStarted = (cb: (data: any) => void) => socketService.onGameStarted(cb);
 export const onGameTerminated = (cb: (data: any) => void) => socketService.onGameTerminated(cb);
 export const onUserJoined = (cb: (data: any) => void) => socketService.onUserJoined(cb);
 export const onUserLeft = (cb: (data: any) => void) => socketService.onUserLeft(cb);
-export const onChatMessage = (cb: (data: any) => void) => socketService.onChatMessage(cb);
 export const onRoomUsers = (cb: (data: any) => void) => socketService.onRoomUsers(cb);
+export const onChatMessage = (cb: (data: any) => void) => socketService.onChatMessage(cb);
 export const onAudio = (cb: (data: any) => void) => socketService.onAudio(cb);
-export const onWebRTCOffer = (cb: (data: any) => void) => socketService.onWebRTCOffer(cb);
-export const onWebRTCAnswer = (cb: (data: any) => void) => socketService.onWebRTCAnswer(cb);
-export const onWebRTCIceCandidate = (cb: (data: any) => void) => socketService.onWebRTCIceCandidate(cb);
+export const onWebRTCOfferReceived = (cb: (data: any) => void) => socketService.onWebRTCOfferReceived(cb);
+export const onWebRTCAnswerReceived = (cb: (data: any) => void) => socketService.onWebRTCAnswerReceived(cb);
+export const onWebRTCIceCandidateReceived = (cb: (data: any) => void) => socketService.onWebRTCIceCandidateReceived(cb);
 export const onWebRTCConnectionState = (cb: (data: any) => void) => socketService.onWebRTCConnectionState(cb);
 export const onWebRTCPeerDisconnected = (cb: (data: any) => void) => socketService.onWebRTCPeerDisconnected(cb);
 export const onConnected = (cb: () => void) => socketService.onConnected(cb);
 export const onDisconnected = (cb: () => void) => socketService.onDisconnected(cb);
-
-// getGameStats fallback
-export const getGameStats = async (): Promise<any> => {
-  return {
-    totalGames: Math.floor(Math.random() * 10000) + 5000,
-    activeGames: Math.floor(Math.random() * 100) + 20,
-    playersOnline: Math.floor(Math.random() * 500) + 100,
-    gamesPlayed: 0,
-    gamesWon: 0,
-  };
-};
+export const getRawSocket = () => socketService.getRawSocket();
