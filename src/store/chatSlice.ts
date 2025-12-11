@@ -1,154 +1,173 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import io, { Socket } from 'socket.io-client';
-import { DefaultEventsMap } from '@socket.io/component-emitter';
-import { ChatMessage, User } from '../types';
+import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { RootState } from './index';
+import {
+  connectSocketService,
+  disconnectSocketService,
+  joinRoom as apiJoinRoom,
+  sendMessage as apiSendMessage,
+  onChatMessage,
+  onUserJoined,
+  onUserLeft,
+  onRoomUsers,
+} from '../utils/api';
 
-// --- Type Definitions ---
-
-interface JoinRoomPayload {
-  roomId: string;
-  userId: string;
-  username: string;
-}
-
-interface SendMessagePayload {
-    roomId: string;
-    userId: string;
-    username: string;
-    message: string;
-}
-
-interface SetAudioStreamPayload {
-  userId: string;
-  stream: MediaStream;
-}
-
-interface ChatState {
-  connected: boolean;
-  roomId: string | null;
-  userId: string | null;
-  username: string | null;
-  messages: ChatMessage[];
-  audioStreams: { [key: string]: MediaStream };
-  peers: User[];
-  peerConnections: { [key: string]: boolean };
-}
-
-// --- Initial State ---
-const initialState: ChatState = {
-  connected: false,
-  roomId: null,
-  userId: null,
-  username: null,
-  messages: [],
-  audioStreams: {},
-  peers: [],
-  peerConnections: {},
+type ChatMessage = {
+  id: string;
+  userId?: string;
+  username?: string;
+  content: string;
+  createdAt?: string;
+  system?: boolean;
 };
 
-let socket: Socket<DefaultEventsMap, DefaultEventsMap>;
+type ChatState = {
+  connected: boolean;
+  roomId?: string;
+  messages: ChatMessage[];
+  users: { id: string; username?: string }[];
+};
 
-// --- Async Thunks ---
+const initialState: ChatState = {
+  connected: false,
+  roomId: undefined,
+  messages: [],
+  users: [],
+};
+
+// Module-level array to keep unsubscribe handlers returned by listener wrappers
+let offHandlers: Array<() => void> = [];
+
 export const connectSocket = createAsyncThunk(
   'chat/connectSocket',
-  async (payload: { username: string, roomId: string }, { dispatch }) => {
-    socket = io('https://niko-kadi.onrender.com');
-    console.log('Socket connecting...');
+  async (
+    payload: { roomId: string; userId?: string; username?: string },
+    { dispatch }
+  ) => {
+    await connectSocketService();
 
-    socket.on('connect', () => {
-      console.log('Socket connected, joining room...');
-      socket.emit('join', { username: payload.username, room: payload.roomId });
-    });
+    // join the room on the server (server may respond or broadcast room state)
+    try {
+      await apiJoinRoom(payload.roomId, payload.userId, payload.username);
+    } catch (e) {
+      // joinRoom may throw if server rejects; still continue to register listeners
+      console.warn('joinRoom failed', e);
+    }
 
-    socket.on('message', (message: ChatMessage) => {
-      dispatch(addMessage(message));
-    });
+    // register listeners and keep their unsubscribe handles
+    offHandlers.push(
+      onChatMessage((msg: ChatMessage) => {
+        dispatch(addMessage(msg));
+      })
+    );
 
-    socket.on('user-joined', (data: { username: string, userId: string }) => {
-      dispatch(addMessage({ userId: 'System', username: 'System', message: `${data.username} joined the room` }));
-    });
+    offHandlers.push(
+      onRoomUsers((users: Array<{ id: string; username?: string }>) => {
+        dispatch(setUsers(users));
+      })
+    );
 
-    socket.on('user-left', (data: { username: string, userId: string }) => {
-      dispatch(addMessage({ userId: 'System', username: 'System', message: `${data.username} left the room` }));
-    });
+    offHandlers.push(
+      onUserJoined((user: { id: string; username?: string }) => {
+        dispatch(addMessage({
+          id: `sys-join-${user.id}-${Date.now()}`,
+          content: `${user.username ?? 'A user'} joined the room`,
+          system: true,
+        }));
+      })
+    );
 
-    socket.on('room-users', (users: User[]) => {
-        dispatch(setPeers(users));
-    });
+    offHandlers.push(
+      onUserLeft((user: { id: string; username?: string }) => {
+        dispatch(addMessage({
+          id: `sys-left-${user.id}-${Date.now()}`,
+          content: `${user.username ?? 'A user'} left the room`,
+          system: true,
+        }));
+      })
+    );
 
-    return true;
+    return { roomId: payload.roomId };
   }
 );
 
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async (payload: SendMessagePayload) => {
-    socket.emit('message', { 
-        room: payload.roomId, 
-        content: payload.message 
-    });
-    // Return the message for optimistic update
-    return { userId: payload.userId, username: payload.username, message: payload.message, content: payload.message, timestamp: Date.now() };
+  async (
+    payload: { roomId: string; message: string; id?: string; username?: string },
+    {}) => {
+    // Use the socket wrapper to emit message. We don't need a response here.
+    await apiSendMessage(payload.message, payload.roomId);
+    // Return a locally-constructed message for optimistic add if desired by UI
+    return {
+      id: payload.id ?? `local-${Date.now()}`,
+      content: payload.message,
+      username: payload.username,
+      createdAt: new Date().toISOString(),
+    } as ChatMessage;
   }
 );
 
-
-// --- Slice Definition ---
-const chatSlice = createSlice({
+export const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
-    addMessage: (state, action: PayloadAction<ChatMessage>) => {
+    addMessage(state, action: PayloadAction<ChatMessage>) {
       state.messages.push(action.payload);
     },
-    setAudioStream: (state, action: PayloadAction<SetAudioStreamPayload>) => {
-      console.log("Setting audio stream for:", action.payload.userId);
-      state.audioStreams[action.payload.userId] = action.payload.stream;
+    setUsers(state, action: PayloadAction<Array<{ id: string; username?: string }>>) {
+      state.users = action.payload;
     },
-    removeAudioStream: (state, action: PayloadAction<string>) => {
-      delete state.audioStreams[action.payload];
+    clearChat(state) {
+      state.messages = [];
+      state.users = [];
+      state.connected = false;
+      state.roomId = undefined;
     },
-    addPeerConnection: (state, action: PayloadAction<string>) => {
-      state.peerConnections[action.payload] = true;
+    disconnectSocketClient(state) {
+      // perform cleanup in extra reducer / thunk side-effect below
+      state.connected = false;
+      state.roomId = undefined;
     },
-    removePeerConnection: (state, action: PayloadAction<string>) => {
-      delete state.peerConnections[action.payload];
-    },
-    setPeers: (state, action: PayloadAction<User[]>) => {
-        state.peers = action.payload;
-    },
-    disconnectSocket: (state) => {
-        if(socket) {
-            socket.disconnect();
-        }
-        return initialState;
-    }
   },
   extraReducers: (builder) => {
-    builder
-      .addCase(connectSocket.fulfilled, (state, action) => {
-        state.connected = true;
-        // @ts-ignore
-        state.roomId = action.meta.arg.roomId;
-        // @ts-ignore
-        state.username = action.meta.arg.username;
-      })
-      .addCase(sendMessage.fulfilled, (state, action: PayloadAction<ChatMessage>) => {
-        state.messages.push(action.payload);
-      });
+    builder.addCase(connectSocket.fulfilled, (state, action) => {
+      state.connected = true;
+      state.roomId = action.payload.roomId;
+    });
+
+    builder.addCase(sendMessage.fulfilled, (state, action) => {
+      // add the optimistic/local message to state
+      state.messages.push(action.payload as ChatMessage);
+    });
   },
 });
 
-export const {
-  addMessage,
-  setAudioStream,
-  removeAudioStream,
-  addPeerConnection,
-  removePeerConnection,
-  setPeers,
-  disconnectSocket
-} = chatSlice.actions;
+export const { addMessage, setUsers, clearChat, disconnectSocketClient } = chatSlice.actions;
 
-export { socket };
+export const disconnectSocket = () => async (dispatch: any) => {
+  // call all unsubscribe handlers
+  try {
+    offHandlers.forEach((off) => {
+      try {
+        off();
+      } catch (e) {
+        // ignore
+      }
+    });
+  } finally {
+    offHandlers = [];
+  }
+
+  try {
+    await disconnectSocketService();
+  } catch (e) {
+    // ignore
+  }
+
+  dispatch(clearChat());
+};
+
+export const selectChat = (state: RootState) => state.chat;
 
 export default chatSlice.reducer;
+

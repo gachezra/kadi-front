@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useUser } from '../hooks/useUser';
-import { createRoom, getRoomDetails, joinRoom } from '../utils/api';
+import { createRoom, getRoomDetails, joinRoom, connectSocketService } from '../utils/api';
 import toast from 'react-hot-toast';
 
 export const PlayPage: React.FC = () => {
@@ -33,8 +33,20 @@ export const PlayPage: React.FC = () => {
     
     setIsLoading(true);
     try {
-      // Step 1: Create the room and get its details
-      const newRoom = await createRoom(numPlayers, numToDeal, user.id, user.username);
+        // Ensure socket connected (helps when backend is socket-first)
+        console.log('[PlayPage] handleCreateRoom -> attempting socket connect');
+        try {
+          await connectSocketService();
+          console.log('[PlayPage] handleCreateRoom -> socket connected');
+        } catch (connErr) {
+          console.warn('[PlayPage] handleCreateRoom -> socket connect failed', connErr);
+        }
+
+        // Step 1: Create the room and get its details
+        const payload = { numPlayers, numToDeal, owner: user.id, ownerName: user.username };
+        console.log('[PlayPage] handleCreateRoom -> payload', payload);
+        const newRoom = await createRoom(numPlayers, numToDeal, user.id, user.username);
+        console.log('[PlayPage] handleCreateRoom <- newRoom', newRoom);
 
       // console.log(newRoom)
       

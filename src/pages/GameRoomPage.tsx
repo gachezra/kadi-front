@@ -8,8 +8,8 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Modal } from '../components/Modal';
 import { useUser } from '../hooks/useUser';
 import { useGameRoom } from '../hooks/useGameRoom';
-import { makeMove, startGame, terminateRoom, changeSuit, answerQuestion, joinRoom, declareNikoKadi, MakeMoveResponse } from '../utils/api';
-import { Card, GameMove } from '../types';
+import { makeMove, startGame, terminateRoom, changeSuit, answerQuestion, joinRoom, declareNikoKadi, dropAce, MakeMoveResponse } from '../utils/api';
+import { Card } from '../types';
 import { CARD_SUITS } from '../utils/constants';
 import toast from 'react-hot-toast';
 import ChatComponent from '../components/ChatComponent';
@@ -29,7 +29,7 @@ export const GameRoomPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { user } = useUser();
-  const { room, isLoading, error, updateGameState } = useGameRoom(roomId);
+  const { room, isLoading, error, updateGameState } = useGameRoom(roomId, user);
 
   const [selectedCards, setSelectedCards] = useState<Card[]>([]);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -41,29 +41,55 @@ export const GameRoomPage: React.FC = () => {
   const [joinRoomCode, setJoinRoomCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  // polling removed to avoid interrupting chat input
 
   const playerList = room?.playerList || [];
   const myPlayer = playerList.find(p => p.userId === user?.id);
   const isOwner = room?.owner === user?.id;
-  const isMyTurn = typeof room?.currentPlayer === 'number' && playerList[room.currentPlayer]?.userId === user?.id;
+  // We maintain an override for displayed currentPlayer when the server asks for an awaiting special action
+  const [overrideCurrentPlayer, setOverrideCurrentPlayer] = React.useState<number | null>(null);
+  const prevCurrentPlayerRef = React.useRef<number | null>(null);
+  const displayedCurrentPlayer = overrideCurrentPlayer ?? room?.currentPlayer;
+  const isMyTurn = typeof displayedCurrentPlayer === 'number' && playerList[displayedCurrentPlayer]?.userId === user?.id;
   const canStart = isOwner && room?.status === 'waiting' && playerList.length >= 2;
 
   useEffect(() => {
-    if (room && user && !playerList.some(p => p.userId === user.id) && !room.isTerminated) {
-      setShowJoinModal(true);
+    if (room) {
+      console.log('[GameRoomPage] room data:', room);
+    }
+    if (room && user && !room.isTerminated) {
+      const isInList = playerList.some(p => p.userId === user.id);
+      const isOwner = room.owner === user.id;
+      console.log('[GameRoomPage] join modal check:', {
+        userId: user.id,
+        roomOwner: room.owner,
+        playerList: playerList.map(p => p.userId),
+        isInList,
+        isOwner,
+        showJoinModal: !(isInList || isOwner)
+      });
+      setShowJoinModal(!(isInList || isOwner));
     } else {
       setShowJoinModal(false);
     }
     if (room && user) {
       setIsKadi(room.isCard?.includes(user.id) || false);
+      // mirror awaitingAceDrops from server if present
+      if (typeof room.awaitingAceDrops !== 'undefined') {
+        setAwaitingAceDrops(Boolean(room.awaitingAceDrops));
+      }
     }
   }, [room, user, playerList]);
   
-  // Polling for game state updates
+  // Instead of continuous polling (which caused chat input interruptions),
+  // call updateGameState once on mount when the room is available and
+  // also when the document becomes visible.
   useEffect(() => {
-    if (room?.status !== 'playing' || room.isTerminated || room.winner) {
-      return; // Don't poll if the game is not active
-    }
+    if (!room) return;
+    if (room.isTerminated || room.winner) return;
+
+    // initial sync
+    updateGameState();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -71,19 +97,15 @@ export const GameRoomPage: React.FC = () => {
       }
     };
 
-    const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        updateGameState();
-      }
-    }, 3000); // Poll every 3 seconds
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [room, updateGameState]);
 
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [room?.status, room?.isTerminated, room?.winner, updateGameState]);
+  // Normalize deck count (server may send `deckCount` or `deckSize`)
+  const deckCount = room?.deckCount ?? room?.deckSize ?? 0;
+
+  // Awaiting ace drop state (mirrors Room.jsx behaviour)
+  const [awaitingAceDrops, setAwaitingAceDrops] = React.useState<boolean>(false);
 
 
   const handleJoinRoom = async () => {
@@ -178,30 +200,35 @@ export const GameRoomPage: React.FC = () => {
     if (!room || !user) return;
     setIsActionLoading(true);
     try {
-      const move: GameMove = { 
-        action, 
-        userId: user.id, 
-        cards: action === 'drop' ? selectedCards.map(cardToString) : undefined 
-      };
-      const response: MakeMoveResponse = await makeMove(room.roomId, move);
+      const cards = action === 'drop' ? selectedCards.map(cardToString) : [];
+      // keep previous currentPlayer in case server asks for awaiting special action
+      prevCurrentPlayerRef.current = room.currentPlayer ?? null;
+      const response: MakeMoveResponse = await makeMove(room.roomId, user.id, action, cards);
       
       if(response.message) toast.success(response.message);
 
+      // No periodic polling here to avoid interrupting chat input.
+
       if (response?.awaitingSpecialAction) {
-          const specialCardValue = response.specialCard?.slice(0, -1);
-          if (specialCardValue === 'A') setShowSuitSelector(true);
-          else if (specialCardValue && ['8', 'Q'].includes(specialCardValue)) setShowQuestionModal(true);
-          else { 
-              setSelectedCards([]);
-              updateGameState();
-          }
+        const specialCardValue = response.specialCard?.slice(0, -1);
+        // preserve displayed current player until action resolved
+        setOverrideCurrentPlayer(prevCurrentPlayerRef.current);
+        if (specialCardValue === 'A') setShowSuitSelector(true);
+        else if (specialCardValue && ['8', 'Q'].includes(specialCardValue)) setShowQuestionModal(true);
+        else {
+          setSelectedCards([]);
+          // still fetch latest state for other changes, but keep override
+          updateGameState();
+        }
       } else {
         setSelectedCards([]);
+        setOverrideCurrentPlayer(null);
         updateGameState();
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || `Failed to ${action} card`);
       updateGameState();
+      // No periodic polling on error either
     } finally {
       setIsActionLoading(false);
     }
@@ -209,6 +236,21 @@ export const GameRoomPage: React.FC = () => {
 
   const handleDropCard = () => selectedCards.length > 0 && performMove('drop');
   const handlePickCard = () => performMove('pick');
+
+  const handleDropAce = async (drop = true) => {
+    if (!room || !user) return;
+    setIsActionLoading(true);
+    try {
+      await dropAce(room.roomId, user.id, drop as any);
+      setAwaitingAceDrops(false);
+      // refresh state
+      updateGameState();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to drop ace');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
 
   const handleDeclareNikoKadi = async () => {
     if (!room || !user) return;
@@ -260,9 +302,10 @@ export const GameRoomPage: React.FC = () => {
   const shouldShowNikoKadiButton = () => {
     if (!room || !user || !myPlayer) return false;
     const playerIndex = playerList.findIndex(p => p.userId === user.id);
+    if (typeof displayedCurrentPlayer !== 'number') return false;
     const prevPlayerIndex = room.gameDirection === 'forward'
-      ? (room.currentPlayer - 1 + room.numPlayers) % room.numPlayers
-      : (room.currentPlayer + 1) % room.numPlayers;
+      ? (displayedCurrentPlayer - 1 + room.numPlayers) % room.numPlayers
+      : (displayedCurrentPlayer + 1) % room.numPlayers;
     return playerIndex === prevPlayerIndex;
   };
 
@@ -334,15 +377,15 @@ export const GameRoomPage: React.FC = () => {
                 <div>
                   <h4 className="font-semibold text-gray-400 mb-2">Top Card</h4>
                   <div className="flex items-center space-x-4">
-                    {renderTopCard()}
-                    <p className="text-gray-400">Deck: <span className="font-semibold text-white">{room.deckCount || 0} cards</span></p>
-                  </div>
+                              {renderTopCard()}
+                              <p className="text-gray-400">Deck: <span className="font-semibold text-white">{deckCount} cards</span></p>
+                            </div>
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-400 mb-2">Players</h4>
                   <div className="space-y-2">
                     {playerList.map((p, index) => (
-                      <div key={p.userId} className={`flex items-center justify-between p-2 rounded-lg ${room.currentPlayer === index ? 'bg-white/10' : 'bg-transparent'}`}>
+                      <div key={p.userId} className={`flex items-center justify-between p-2 rounded-lg ${(displayedCurrentPlayer === index) ? 'bg-white/10' : 'bg-transparent'}`}>
                         <span className="text-white font-medium flex items-center gap-2">
                           {p.username}
                           {room.owner === p.userId && <span title="Room Owner"><Crown className="text-yellow-400" size={14} /></span>}
@@ -434,6 +477,28 @@ export const GameRoomPage: React.FC = () => {
           <div className="flex justify-end gap-3"><Button variant="secondary" onClick={() => setShowQuestionModal(false)}>Cancel</Button><Button variant="primary" onClick={handleQuestionSubmit} disabled={!questionAnswer.trim() || isActionLoading}>{isActionLoading ? <LoadingSpinner size="sm" /> : 'Submit'}</Button></div>
         </div>
       </Modal>
+      {/* Awaiting Ace Drop Modal (mirrors Room.jsx) */}
+      {awaitingAceDrops && myPlayer && myPlayer.hand && myPlayer.hand.some((card: any) => (card?.value ? card.value === 'A' : String(card).charAt(0) === 'A')) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-[#232946] p-6 rounded-lg shadow-lg">
+            <h3 className="text-xl font-bold mb-4 text-[#F5F5F5]">Do you want to drop your Ace?</h3>
+            <div className="flex gap-4">
+              <button
+                onClick={() => handleDropAce(true)}
+                className="bg-[#4ECCA3] hover:bg-[#399b7e] text-white font-bold py-2 px-4 rounded transition-colors"
+              >
+                Drop Ace
+              </button>
+              <button
+                onClick={() => handleDropAce(false)}
+                className="bg-[#E94560] hover:bg-[#D83149] text-white font-bold py-2 px-4 rounded transition-colors"
+              >
+                Don't Drop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

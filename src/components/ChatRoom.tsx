@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { API_BASE_URL } from '../utils/constants';
 import { 
   BsMicFill, 
   BsMicMuteFill,
@@ -50,13 +51,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ userId, username, roomId }) => {
   };
 
   useEffect(() => {
-    socketRef.current = io('https://niko-kadi.onrender.com');
+    socketRef.current = io(API_BASE_URL);
 
     socketRef.current.on('connect', () => {
       setIsConnected(true);
       console.log('Connected to server');
-      // Join room immediately with provided credentials
-      socketRef.current?.emit('join', { username, room: roomId });
+      // Join room immediately with provided credentials (use quick-reference event)
+      socketRef.current?.emit('room:join', { roomId, userId, username });
     });
 
     socketRef.current.on('room-users', (roomUsers: User[]) => {
@@ -78,29 +79,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ userId, username, roomId }) => {
       closePeerConnection(leftUserId);
     });
 
-    socketRef.current.on('message', (msg: Message) => {
+    socketRef.current.on('chat:message', (msg: Message) => {
       setMessages(prev => [...prev, msg]);
       if (chatContainerRef.current) {
         chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
       }
     });
 
-    socketRef.current.on('offer', async ({ from, offer }: { from: string, offer: RTCSessionDescriptionInit }) => {
+    socketRef.current.on('webrtc:offer-received', async ({ from, offer }: { from: string, offer: RTCSessionDescriptionInit }) => {
       const pc = peerConnections.get(from) || await createPeerConnection(from);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socketRef.current?.emit('answer', { target: from, answer });
+      socketRef.current?.emit('webrtc:answer', { targetSocketId: from, answer });
     });
 
-    socketRef.current.on('answer', async ({ from, answer }: { from: string, answer: RTCSessionDescriptionInit }) => {
+    socketRef.current.on('webrtc:answer-received', async ({ from, answer }: { from: string, answer: RTCSessionDescriptionInit }) => {
       const pc = peerConnections.get(from);
       if (pc) {
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
       }
     });
 
-    socketRef.current.on('ice-candidate', async ({ from, candidate }: { from: string, candidate: RTCIceCandidateInit }) => {
+    socketRef.current.on('webrtc:ice-candidate-received', async ({ from, candidate }: { from: string, candidate: RTCIceCandidateInit }) => {
       const pc = peerConnections.get(from);
       if (pc) {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -160,7 +161,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ userId, username, roomId }) => {
       pc.onicecandidate = ({ candidate }) => {
         console.log(`ICE candidate for ${peerId}:`, candidate);
         if (candidate) {
-          socketRef.current?.emit('ice-candidate', { target: peerId, candidate });
+          socketRef.current?.emit('webrtc:ice-candidate', { targetSocketId: peerId, candidate });
         }
       };
 
@@ -180,7 +181,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ userId, username, roomId }) => {
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socketRef.current?.emit('offer', { target: peerId, offer });
+          socketRef.current?.emit('webrtc:offer', { targetSocketId: peerId, offer });
         } catch (error) {
           console.error('Error during negotiation:', error);
           setAudioStatus(`Negotiation error: ${(error as Error).message}`);
@@ -215,9 +216,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ userId, username, roomId }) => {
     e?.preventDefault();
     
     if (message.trim()) {
-      socketRef.current?.emit('message', { 
+      socketRef.current?.emit('chat:message', { 
         content: message.trim(), 
-        room: roomId 
+        roomId,
+        userId,
+        username,
+        timestamp: Date.now()
       });
       setMessage('');
     }
